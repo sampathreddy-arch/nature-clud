@@ -5,7 +5,13 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "mongosh": "npx mongosh \"mongodb+srv://madurusampath_db_user:G7U1hWsRu7ng4HTL@cluster0.8zo4dqi.mongodb.net/ecocert\"",
+    "mongo:cli": "node mongo-cli.js",
+    "mongo:stats": "node mongo-cli.js stats",
+    "mongo:students": "node mongo-cli.js students",
+    "mongo:certs": "node mongo-cli.js certs",
+    "mongo:sync": "node mongo-cli.js sync"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

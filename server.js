@@ -30,6 +30,7 @@ const send = (file) => (req, res) => res.sendFile(P(file));
 app.get("/", send("landing.html"));
 app.get("/admin", send("admin.html"));
 app.use("/data-uploads", express.static(UPLOAD_DIR, { fallthrough: false }));
+app.use(express.static(path.join(__dirname, "public")));
 app.get("/verify/:token", send("verify.html"));
 app.get("/portal/:token", (req, res) =>
   res.send(portalHTML().replace(/__TOKEN__/g, JSON.stringify(req.params.token))));

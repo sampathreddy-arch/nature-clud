@@ -32,14 +32,14 @@ function certCSS() {
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#3a4d3a;font-family:Georgia,'Times New Roman',serif}
 .cert{width:297mm;height:210mm;margin:12px auto;position:relative;background:#fffdf5;color:#2b3a2b;overflow:hidden;
- border:6px solid ${GREEN};outline:4px solid #fffdf5;outline-offset:-14px;
+ border:6px solid ${GREEN};outline:4px solid #c09c0aff;outline-offset:-14px;
  background-image:radial-gradient(ellipse at 8% 8%,#f2fbee 0%,rgba(255,253,245,0) 55%),radial-gradient(ellipse at 92% 92%,#f2fbee 0%,rgba(255,253,245,0) 55%)}
 .corn{position:absolute;font-size:52px;color:${GREEN2};opacity:.9;line-height:1;z-index:3}
 .corn.tl{top:22px;left:26px;transform:rotate(-8deg)}.corn.tr{top:22px;right:26px;transform:rotate(8deg)}
 .corn.bl{bottom:22px;left:26px;transform:rotate(8deg)}.corn.br{bottom:22px;right:26px;transform:rotate(-8deg)}
 .watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:300px;color:${GREEN2};opacity:.055;z-index:1;transform:rotate(-12deg)}
 .inner{position:absolute;inset:16px;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px 60px}
-.logo{height:64px;margin-bottom:2px}
+.logo{height:58px;max-width:320px;object-fit:contain;margin-bottom:4px}
 .institute{font-size:22px;font-weight:bold;letter-spacing:2px;color:${GREEN};text-transform:uppercase}
 .organiser{font-size:13px;letter-spacing:4px;color:#6b7d6b;text-transform:uppercase;margin-top:3px}
 .divider{width:420px;height:2px;background:linear-gradient(90deg,transparent,${GOLD},transparent);margin:11px 0}
@@ -142,9 +142,12 @@ function generatePDF(d) {
     doc.lineWidth(6).rect(10, 10, W - 20, H - 20).stroke(hex(GREEN));
     doc.lineWidth(1.4).rect(20, 20, W - 40, H - 40).stroke(hex(GOLD));
 
-    let y = 34;
-    if (d.logoBuf) { doc.image(d.logoBuf, cx - 30, y, { fit: [60, 60], align: "center" }); y += 66; }
-    else y += 14;
+    let y = 32;
+    if (d.logoBuf) {
+      const lw = 190, lh = 46;
+      doc.image(d.logoBuf, cx - lw / 2, y, { fit: [lw, lh], align: "center" });
+      y += lh + 10;
+    } else y += 14;
 
     const langs = (size, font, color, spacing, text, dy = 0) => {
       doc.font(font).fontSize(size).fillColor(color);

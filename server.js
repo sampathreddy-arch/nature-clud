@@ -14,6 +14,7 @@ const fs = require("node:fs");
 const crypto = require("node:crypto");
 const { row, all, run, uid, UPLOAD_DIR } = require("./db");
 const { certCSS, renderCertHTML, generatePDF } = require("./certgen");
+const mongo = require("./mongo");
 
 const app = express();
 const PORT = process.env.PORT || 3100;         // 3100: 3000 is used by another local project
@@ -243,7 +244,9 @@ app.post("/api/admin/events/:id/students", requireAdmin, (req, res) => {
       (b.phone || "").trim(),
       (b.date || "").trim()
     );
-    res.json({ ok: true, id: info.lastInsertRowid });
+    const sid = info.lastInsertRowid;
+    mongo.syncStudent({ id: sid, event_id: e.id, name: b.name, roll_number: b.roll_number, department: b.department, year: b.year, email: b.email, phone: b.phone, date: b.date });
+    res.json({ ok: true, id: sid });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) return res.status(409).json({ error: "Roll number already registered for this event" });
     throw err;
@@ -263,6 +266,8 @@ app.put("/api/admin/students/:id", requireAdmin, (req, res) => {
   try {
     run(`UPDATE students SET ${updates.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`,
       ...updates.map((k) => String(b[k] ?? "").trim()), s.id);
+    const updated = row("SELECT * FROM students WHERE id = ?", s.id);
+    if (updated) mongo.syncStudent(updated);
     res.json({ ok: true });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) return res.status(409).json({ error: "Roll number already used by another student" });
@@ -271,6 +276,8 @@ app.put("/api/admin/students/:id", requireAdmin, (req, res) => {
 });
 
 app.delete("/api/admin/students/:id", requireAdmin, (req, res) => {
+  const s = row("SELECT * FROM students WHERE id = ?", req.params.id);
+  if (s) mongo.deleteStudent(s.event_id, s.roll_number);
   run("DELETE FROM students WHERE id = ?", req.params.id);
   res.json({ ok: true });
 });
@@ -332,6 +339,7 @@ app.post("/api/admin/events/:id/students/import", requireAdmin, upload.single("f
       if (cat) createCertificate(e.id, sid, cat, st.date);
     }
   }
+  mongo.syncAllFromSQLite(require("./db")).catch(() => {});
   res.json({ ok: true, added, updated, skipped, total: added + updated + skipped });
 });
 const NORMALISE = new Map([
@@ -361,10 +369,14 @@ function createCertificate(eventId, studentId, category, issueDate = null) {
   const dateVal = issueDate || stu?.date || event?.event_date || "";
   if (existing) {
     run("UPDATE certificates SET category = ?, issue_date = ? WHERE id = ?", cat, dateVal, existing.id);
+    const cRow = row("SELECT * FROM certificates WHERE id = ?", existing.id);
+    if (cRow) mongo.syncCertificate(cRow);
     return existing.id;
   }
   const info = run("INSERT INTO certificates (token, cert_uid, student_id, event_id, category, issue_date) VALUES (?,?,?,?,?,?)",
     uid(18), nextCertUid(event), studentId, eventId, cat, dateVal);
+  const cRow = row("SELECT * FROM certificates WHERE id = ?", info.lastInsertRowid);
+  if (cRow) mongo.syncCertificate(cRow);
   return info.lastInsertRowid;
 }
 
@@ -631,6 +643,15 @@ app.get("/api/admin/events/:id/assets", requireAdmin, (req, res) => {
   res.json({ assets: e || {} });
 });
 
+/* ---------------- MongoDB Atlas status & sync ---------------- */
+app.get("/api/admin/mongo/status", requireAdmin, async (req, res) => {
+  res.json(await mongo.getMongoStatus());
+});
+
+app.post("/api/admin/mongo/sync", requireAdmin, async (req, res) => {
+  res.json(await mongo.syncAllFromSQLite(require("./db")));
+});
+
 /* 404 for unknown api */
 app.use("/api", (req, res) => res.status(404).json({ error: "Not found" }));
 
@@ -654,4 +675,7 @@ app.listen(PORT, () => {
   console.log(`  Admin panel : ${BASE}/admin   (default: admin / admin123)`);
   console.log(`  Home        : ${BASE}/`);
   console.log("===========================================================");
+  mongo.connectMongo().then((ok) => {
+    if (ok) mongo.syncAllFromSQLite(require("./db"));
+  }).catch((e) => console.warn("[mongo] Init warning:", e.message));
 });

@@ -11,6 +11,7 @@
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
     "jszip": "^3.10.1",
+    "mongoose": "^9.12.1",
     "multer": "^2.0.0",
     "pdfkit": "^0.15.0",
     "qrcode": "^1.5.4",

@@ -1,5 +1,5 @@
 node_modules/
-data/
+data/*.db-wal
+data/*.db-shm
 *.log
 .DS_Store
-

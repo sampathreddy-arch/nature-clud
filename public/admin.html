@@ -186,22 +186,26 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
             <button class="btn danger" onclick="delAsset('logo')">✕</button>
           </div></div>
         <div><label>Signature – <span id="lb_s1">Coordinator</span></label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <label class="btn" style="display:inline-block">Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('sig1',this)"></label>
-            <input class="f" id="e_sig1_role" placeholder="Role, e.g. Faculty Coordinator" style="width:200px">
-            <img id="pl_sig1" style="height:34px;border-radius:6px;border:1px solid var(--line)" onerror="this.style.display='none'">
-            <button class="btn danger" onclick="delAsset('sig1')">✕</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="btn" style="display:inline-block">📁 Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('sig1',this)"></label>
+            <button class="btn" type="button" onclick="openSigPad('sig1','Coordinator')">✍️ Draw</button>
+            <button class="btn" type="button" onclick="openSigType('sig1','Coordinator')">⌨ Type</button>
+            <input class="f" id="e_sig1_role" placeholder="Role, e.g. Faculty Coordinator" style="width:180px">
+            <img id="pl_sig1" style="height:34px;border-radius:6px;border:1px solid var(--line);background:#fff;padding:2px" onerror="this.style.display='none'">
+            <button class="btn danger" onclick="delAsset('sig1')" title="Remove signature">✕</button>
           </div></div>
         <div><label>Signature – <span id="lb_s2">Principal</span></label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <label class="btn" style="display:inline-block">Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('sig2',this)"></label>
-            <input class="f" id="e_sig2_role" placeholder="Role, e.g. Principal" style="width:200px">
-            <img id="pl_sig2" style="height:34px;border-radius:6px;border:1px solid var(--line)" onerror="this.style.display='none'">
-            <button class="btn danger" onclick="delAsset('sig2')">✕</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label class="btn" style="display:inline-block">📁 Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('sig2',this)"></label>
+            <button class="btn" type="button" onclick="openSigPad('sig2','Principal')">✍️ Draw</button>
+            <button class="btn" type="button" onclick="openSigType('sig2','Principal')">⌨ Type</button>
+            <input class="f" id="e_sig2_role" placeholder="Role, e.g. Principal" style="width:180px">
+            <img id="pl_sig2" style="height:34px;border-radius:6px;border:1px solid var(--line);background:#fff;padding:2px" onerror="this.style.display='none'">
+            <button class="btn danger" onclick="delAsset('sig2')" title="Remove signature">✕</button>
           </div></div>
         <div style="display:flex;align-items:end"><button class="btn gold" onclick="openPreview(-1)">👁 Preview design (first certificate)</button></div>
       </div>
-      <div class="hint">Upload a scanned PNG/JPG of the actual signature (transparent background recommended). Role text appears under the signature line.</div>
+      <div class="hint">Admins can upload an image (PNG/JPG), draw on the signature pad with a mouse/touchscreen, or type the name to generate a cursive signature. Role text appears under the signature line.</div>
     </div>
   </section>
 
@@ -317,6 +321,58 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn primary" style="flex:1" id="ceSaveBtn" onclick="saveCertEdit()">💾 Save Certificate</button>
       <button class="btn" onclick="closeCertEdit();">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- signature drawing modal -->
+<div id="sigPadModal" style="position:fixed;inset:0;background:rgba(10,30,18,.55);display:none;z-index:80;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeSigPad()">
+  <div style="background:#fff;border-radius:16px;width:min(500px,96vw);padding:22px 24px;box-shadow:0 16px 44px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b style="color:var(--green);font-size:16px" id="sigPadTitle">✍️ Draw Signature</b>
+      <button class="btn" onclick="closeSigPad()">✕</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Sign on the canvas using your mouse, trackpad, or finger/stylus on touch screens.</p>
+    <div style="border:2px dashed var(--line);border-radius:10px;background:#fffdfa;position:relative">
+      <canvas id="sigCanvas" width="450" height="150" style="display:block;width:100%;height:150px;touch-action:none;cursor:crosshair"></canvas>
+      <div style="position:absolute;bottom:8px;left:14px;font-size:11px;color:#94a394;pointer-events:none">Sign above this line ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <button class="btn" type="button" onclick="clearSigCanvas()">🗑 Clear</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn" type="button" onclick="closeSigPad()">Cancel</button>
+        <button class="btn primary" type="button" onclick="saveDrawnSig()">💾 Use This Signature</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- signature type modal -->
+<div id="sigTypeModal" style="position:fixed;inset:0;background:rgba(10,30,18,.55);display:none;z-index:80;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeSigType()">
+  <div style="background:#fff;border-radius:16px;width:min(500px,96vw);padding:22px 24px;box-shadow:0 16px 44px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <b style="color:var(--green);font-size:16px" id="sigTypeTitle">⌨ Type Signature</b>
+      <button class="btn" onclick="closeSigType()">✕</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Signatory Name</label>
+      <input class="f" id="sigTypeName" placeholder="e.g. Dr. A. Sharma" oninput="renderTypePreview()">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Cursive Script Style</label>
+      <select class="f" id="sigTypeFont" onchange="renderTypePreview()">
+        <option value="'Brush Script MT', cursive">Artistic Brush Script</option>
+        <option value="'Segoe Script', cursive">Fluent Elegant Cursive</option>
+        <option value="'Lucida Handwriting', cursive">Classic Hand-lettering</option>
+        <option value="cursive">Contemporary Cursive</option>
+      </select>
+    </div>
+    <div style="border:1.5px solid var(--line);border-radius:10px;background:#fffdfa;height:95px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;overflow:hidden">
+      <div id="sigTypePreview" style="font-size:36px;color:#183b28;font-family:'Brush Script MT',cursive;padding:0 16px">Preview</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn" type="button" onclick="closeSigType()">Cancel</button>
+      <button class="btn primary" type="button" onclick="saveTypedSig()">💾 Apply Signature</button>
     </div>
   </div>
 </div>
@@ -565,6 +621,141 @@ async function upAsset(key, input) {
 async function delAsset(key) {
   await api(`/api/admin/events/${EV}/assets/${key}`, { method: "DELETE" }).catch(e => alert(e.message));
   loadEventForm();
+}
+
+/* ---- Signature Drawing & Typing Pad ---- */
+let activeSigKey = 'sig1';
+let isSigDrawing = false, sigLastX = 0, sigLastY = 0;
+
+function openSigPad(key, label) {
+  activeSigKey = key;
+  $("sigPadTitle").textContent = `✍️ Draw Signature – ${label}`;
+  $("sigPadModal").style.display = "flex";
+  setTimeout(initSigCanvas, 50);
+}
+function closeSigPad() { $("sigPadModal").style.display = "none"; }
+
+function initSigCanvas() {
+  const cvs = $("sigCanvas");
+  const ctx = cvs.getContext("2d");
+  cvs.width = 450;
+  cvs.height = 150;
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+
+  function getPos(e) {
+    const r = cvs.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return [(cx - r.left) * (cvs.width / r.width), (cy - r.top) * (cvs.height / r.height)];
+  }
+
+  function start(e) {
+    e.preventDefault();
+    isSigDrawing = true;
+    [sigLastX, sigLastY] = getPos(e);
+  }
+  function move(e) {
+    if (!isSigDrawing) return;
+    e.preventDefault();
+    const [x, y] = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(sigLastX, sigLastY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = "#163a24";
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    [sigLastX, sigLastY] = [x, y];
+  }
+  function stop(e) {
+    if (isSigDrawing) {
+      e.preventDefault();
+      isSigDrawing = false;
+    }
+  }
+
+  cvs.onmousedown = start;
+  cvs.onmousemove = move;
+  window.onmouseup = () => { isSigDrawing = false; };
+  cvs.ontouchstart = start;
+  cvs.ontouchmove = move;
+  cvs.ontouchend = stop;
+}
+
+function clearSigCanvas() {
+  const cvs = $("sigCanvas");
+  cvs.getContext("2d").clearRect(0, 0, cvs.width, cvs.height);
+}
+
+async function saveDrawnSig() {
+  const cvs = $("sigCanvas");
+  cvs.toBlob(async (blob) => {
+    if (!blob) return;
+    const f = new FormData();
+    f.append("key", activeSigKey);
+    f.append("file", blob, `${activeSigKey}.png`);
+    const r = await fetch(`/api/admin/events/${EV}/assets`, { method: "POST", body: f });
+    if (!r.ok) alert("Upload failed");
+    else toast("Signature saved!");
+    closeSigPad();
+    loadEventForm();
+  }, "image/png");
+}
+
+function openSigType(key, label) {
+  activeSigKey = key;
+  $("sigTypeTitle").textContent = `⌨ Type Signature – ${label}`;
+  $("sigTypeName").value = $("e_" + key + "_role").value || "";
+  $("sigTypeModal").style.display = "flex";
+  renderTypePreview();
+}
+function closeSigType() { $("sigTypeModal").style.display = "none"; }
+
+function renderTypePreview() {
+  const name = $("sigTypeName").value.trim() || "Signature";
+  const font = $("sigTypeFont").value;
+  const p = $("sigTypePreview");
+  p.style.fontFamily = font;
+  p.textContent = name;
+}
+
+async function saveTypedSig() {
+  const name = $("sigTypeName").value.trim();
+  if (!name) { alert("Please type a name"); return; }
+  const font = $("sigTypeFont").value;
+  const cvs = document.createElement("canvas");
+  cvs.width = 420; cvs.height = 130;
+  const ctx = cvs.getContext("2d");
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  ctx.font = `italic 42px ${font}`;
+  ctx.fillStyle = "#163a24";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name, cvs.width / 2, cvs.height / 2 - 6);
+
+  // stylish accent underline
+  const tw = ctx.measureText(name).width;
+  const x0 = Math.max(24, (cvs.width - tw) / 2 - 8);
+  const x1 = Math.min(cvs.width - 24, (cvs.width + tw) / 2 + 16);
+  ctx.beginPath();
+  ctx.moveTo(x0, cvs.height / 2 + 24);
+  ctx.bezierCurveTo(x0 + 40, cvs.height / 2 + 18, x1 - 40, cvs.height / 2 + 28, x1, cvs.height / 2 + 22);
+  ctx.strokeStyle = "#b8860b";
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  cvs.toBlob(async (blob) => {
+    if (!blob) return;
+    const f = new FormData();
+    f.append("key", activeSigKey);
+    f.append("file", blob, `${activeSigKey}.png`);
+    const r = await fetch(`/api/admin/events/${EV}/assets`, { method: "POST", body: f });
+    if (!r.ok) alert("Upload failed");
+    else toast("Signature generated & applied!");
+    closeSigType();
+    loadEventForm();
+  }, "image/png");
 }
 function openPreview(certId) {
   api(`/api/admin/events/${EV}/certificates`).then(d => {

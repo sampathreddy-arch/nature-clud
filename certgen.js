@@ -87,8 +87,11 @@ function renderCertHTML(d) {
   if (d.student.year) ach += ` (${esc(d.student.year)})`;
 
   const verUrl = esc(d.verifyUrl || "");
-  const sigBlock = (img, role, fallback) =>
-    `<div class="sign">${img ? `<img src="${img}" alt="">` : ""}<div class="line"></div><div class="role">${esc(role || fallback)}</div><div class="sub">${esc(fallback)}</div></div>`;
+  const sigBlock = (img, role, fallback) => {
+    const primary = role || fallback;
+    const secondary = (role && role !== fallback) ? `<div class="sub">${esc(fallback)}</div>` : "";
+    return `<div class="sign">${img ? `<img src="${img}" alt="">` : `<div style="height:52px"></div>`}<div class="line"></div><div class="role">${esc(primary)}</div>${secondary}</div>`;
+  };
 
   return `<div class="cert" data-cert="${esc(d.certUid)}">
   <div class="watermark">🌿</div>
@@ -199,8 +202,10 @@ function generatePDF(d) {
       doc.moveTo(xc - sigW / 2 + 10, sy).lineTo(xc + sigW / 2 - 10, sy).lineWidth(1).strokeColor("#4a5d4a").stroke();
       doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#2b3a2b");
       doc.text(role || fallback, xc - sigW / 2, sy + 5, { width: sigW, align: "center" });
-      doc.font("Helvetica").fontSize(7).fillColor("#6b7d6b");
-      doc.text(fallback, xc - sigW / 2, sy + 15, { width: sigW, align: "center" });
+      if (role && role !== fallback) {
+        doc.font("Helvetica").fontSize(7).fillColor("#6b7d6b");
+        doc.text(fallback, xc - sigW / 2, sy + 15, { width: sigW, align: "center" });
+      }
     };
     putSig(d.sig1Buf, cx - 210, d.event.sig1_role, "Faculty Coordinator");
     putSig(d.sig2Buf, cx + 210, d.event.sig2_role, "Principal");

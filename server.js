@@ -209,15 +209,15 @@ app.delete("/api/admin/events/:id/assets/:key", requireAdmin, (req, res) => {
 app.get("/api/admin/events/:id/students", requireAdmin, (req, res) => {
   const q = (req.query.q || "").trim();
   let rows;
+  const selectCols = `s.id, s.name, s.roll_number, s.department, s.year, s.email, s.phone, s.date, s.created_at,
+                      c.id cert_id, c.category cert_category, c.status cert_status, c.token cert_token, c.cert_uid, c.issue_date`;
   if (q) {
-    rows = all(`SELECT s.id, s.name, s.roll_number, s.year, s.email,
-                       c.category cert_category, c.status cert_status, c.token cert_token
+    rows = all(`SELECT ${selectCols}
                 FROM students s LEFT JOIN certificates c ON c.student_id = s.id AND c.event_id = s.event_id
-                WHERE s.event_id = ? AND (s.name LIKE ? OR s.roll_number LIKE ?)
-                ORDER BY s.name`, req.params.id, `%${q}%`, `%${q}%`);
+                WHERE s.event_id = ? AND (s.name LIKE ? OR s.roll_number LIKE ? OR s.department LIKE ? OR s.email LIKE ?)
+                ORDER BY s.name`, req.params.id, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   } else {
-    rows = all(`SELECT s.id, s.name, s.roll_number, s.year, s.email,
-                       c.category cert_category, c.status cert_status, c.token cert_token
+    rows = all(`SELECT ${selectCols}
                 FROM students s LEFT JOIN certificates c ON c.student_id = s.id AND c.event_id = s.event_id
                 WHERE s.event_id = ? ORDER BY s.name`, req.params.id);
   }
@@ -225,15 +225,24 @@ app.get("/api/admin/events/:id/students", requireAdmin, (req, res) => {
   res.json({ students: rows, total });
 });
 
-/* Department is no longer used — dept columns are ignored on import and edits */
+/* Create student with all demographic & date fields */
 app.post("/api/admin/events/:id/students", requireAdmin, (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.roll_number) return res.status(400).json({ error: "Name and Roll Number are required" });
   const e = row("SELECT id FROM events WHERE id = ?", req.params.id);
   if (!e) return res.status(404).json({ error: "Event not found" });
   try {
-    const info = run("INSERT INTO students (event_id, name, roll_number, department, year, email) VALUES (?,?,?,?,?,?)",
-      e.id, String(b.name).trim(), String(b.roll_number).trim(), "", b.year || "", (b.email || "").trim());
+    const info = run(
+      "INSERT INTO students (event_id, name, roll_number, department, year, email, phone, date) VALUES (?,?,?,?,?,?,?,?)",
+      e.id,
+      String(b.name).trim(),
+      String(b.roll_number).trim(),
+      (b.department || "").trim(),
+      (b.year || "").trim(),
+      (b.email || "").trim(),
+      (b.phone || "").trim(),
+      (b.date || "").trim()
+    );
     res.json({ ok: true, id: info.lastInsertRowid });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) return res.status(409).json({ error: "Roll number already registered for this event" });
@@ -241,18 +250,19 @@ app.post("/api/admin/events/:id/students", requireAdmin, (req, res) => {
   }
 });
 
+/* Update student with all fields */
 app.put("/api/admin/students/:id", requireAdmin, (req, res) => {
   const s = row("SELECT * FROM students WHERE id = ?", req.params.id);
   if (!s) return res.status(404).json({ error: "Student not found" });
   const b = req.body || {};
-  const F = ["name", "roll_number", "year", "email"];        // department intentionally excluded
+  const F = ["name", "roll_number", "department", "year", "email", "phone", "date"];
   const updates = F.filter((k) => k in b);
   if (!updates.length) return res.json({ ok: true });
   if (!String(b.name || s.name).trim() || !String(b.roll_number || s.roll_number).trim())
     return res.status(400).json({ error: "Name and roll number cannot be empty" });
   try {
     run(`UPDATE students SET ${updates.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`,
-      ...updates.map((k) => String(b[k]).trim()), s.id);
+      ...updates.map((k) => String(b[k] ?? "").trim()), s.id);
     res.json({ ok: true });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) return res.status(409).json({ error: "Roll number already used by another student" });
@@ -265,10 +275,10 @@ app.delete("/api/admin/students/:id", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-/* Excel / CSV import — headers matched flexibly */
+/* Excel / CSV import — stores all data & dates of all students */
 app.post("/api/admin/events/:id/students/import", requireAdmin, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Upload an .xlsx or .csv file" });
-  const e = row("SELECT id FROM events WHERE id = ?", req.params.id);
+  const e = row("SELECT id, event_date FROM events WHERE id = ?", req.params.id);
   if (!e) return res.status(404).json({ error: "Event not found" });
   let table;
   try {
@@ -278,37 +288,51 @@ app.post("/api/admin/events/:id/students/import", requireAdmin, upload.single("f
     return res.status(400).json({ error: "Could not read the file. Use .xlsx or .csv with a header row." });
   }
   const keyOf = (h) => {
-    const k = String(h || "").toLowerCase();
-    if (/^(student\s*)?name$/.test(k)) return "name";
-    if (/roll/.test(k)) return "roll_number";
-    if (/dept|branch|course/.test(k)) return null;        // department no longer needed
-    if (/year/.test(k)) return "year";
-    if (/e-?mail/.test(k)) return "email";
-    if (/award|category|certificate/.test(k)) return "award";
+    const k = String(h || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (/^(student)?name|fullname|candidate/.test(k)) return "name";
+    if (/roll|reg|htno|hallticket|studentid|regno/.test(k)) return "roll_number";
+    if (/dept|department|branch|course|stream|specialization/.test(k)) return "department";
+    if (/year|sem|semester|class|batch/.test(k)) return "year";
+    if (/email|mail|emailid/.test(k)) return "email";
+    if (/phone|mobile|contact|cell|whatsapp/.test(k)) return "phone";
+    if (/date|eventdate|issuedate|registereddate/.test(k)) return "date";
+    if (/award|category|certificate|prize|position|rank/.test(k)) return "award";
     return null;
   };
-  let added = 0, skipped = 0, errs = [];
-  const sample = [];
+  let added = 0, skipped = 0, updated = 0;
   for (const r of table) {
     const st = {};
-    for (const [h, v] of Object.entries(r)) { const k = keyOf(h); if (k) st[k] = String(v).trim(); }
-    if (!st.name || !st.roll_number) { skipped++; if (sample.length < 3) sample.push(r); continue; }
+    for (const [h, v] of Object.entries(r)) { const k = keyOf(h); if (k) st[k] = String(v ?? "").trim(); }
+    if (!st.name || !st.roll_number) { skipped++; continue; }
     let sid;
-    try {
-      const info = run("INSERT INTO students (event_id, name, roll_number, department, year, email) VALUES (?,?,?,?,?,?)",
-        e.id, st.name, st.roll_number, "", st.year || "", st.email || "");
-      sid = info.lastInsertRowid;
-      added++;
-    } catch {
-      skipped++;
-      continue;
+    const existing = row("SELECT id FROM students WHERE event_id = ? AND roll_number = ?", e.id, st.roll_number);
+    if (existing) {
+      sid = existing.id;
+      run(`UPDATE students SET name = ?, department = COALESCE(NULLIF(?,''), department),
+                               year = COALESCE(NULLIF(?,''), year), email = COALESCE(NULLIF(?,''), email),
+                               phone = COALESCE(NULLIF(?,''), phone), date = COALESCE(NULLIF(?,''), date)
+           WHERE id = ?`,
+        st.name, st.department || "", st.year || "", st.email || "", st.phone || "", st.date || "", sid);
+      updated++;
+    } else {
+      try {
+        const info = run(
+          "INSERT INTO students (event_id, name, roll_number, department, year, email, phone, date) VALUES (?,?,?,?,?,?,?,?)",
+          e.id, st.name, st.roll_number, st.department || "", st.year || "", st.email || "", st.phone || "", st.date || ""
+        );
+        sid = info.lastInsertRowid;
+        added++;
+      } catch {
+        skipped++;
+        continue;
+      }
     }
     if (st.award) {
       const cat = NORMALISE.get(st.award.toLowerCase()) || null;
-      if (cat) createCertificate(e.id, sid, cat);
+      if (cat) createCertificate(e.id, sid, cat, st.date);
     }
   }
-  res.json({ ok: true, added, skipped, total: added + skipped });
+  res.json({ ok: true, added, updated, skipped, total: added + updated + skipped });
 });
 const NORMALISE = new Map([
   ["first prize", "First Prize"], ["first", "First Prize"], ["1st", "First Prize"], ["winner", "First Prize"],
@@ -329,18 +353,23 @@ function nextCertUid(event) {
   return `${prefix}-${String(max + 1).padStart(4, "0")}`;
 }
 
-function createCertificate(eventId, studentId, category) {
+function createCertificate(eventId, studentId, category, issueDate = null) {
   const event = row("SELECT * FROM events WHERE id = ?", eventId);
   const cat = NORMALISE.get(String(category).toLowerCase()) || category;
   const existing = row("SELECT id FROM certificates WHERE student_id = ? AND event_id = ?", studentId, eventId);
-  if (existing) { run("UPDATE certificates SET category = ? WHERE id = ?", cat, existing.id); return existing.id; }
-  const info = run("INSERT INTO certificates (token, cert_uid, student_id, event_id, category) VALUES (?,?,?,?,?)",
-    uid(18), nextCertUid(event), studentId, eventId, cat);
+  const stu = row("SELECT date FROM students WHERE id = ?", studentId);
+  const dateVal = issueDate || stu?.date || event?.event_date || "";
+  if (existing) {
+    run("UPDATE certificates SET category = ?, issue_date = ? WHERE id = ?", cat, dateVal, existing.id);
+    return existing.id;
+  }
+  const info = run("INSERT INTO certificates (token, cert_uid, student_id, event_id, category, issue_date) VALUES (?,?,?,?,?,?)",
+    uid(18), nextCertUid(event), studentId, eventId, cat, dateVal);
   return info.lastInsertRowid;
 }
 
 app.get("/api/admin/events/:id/certificates", requireAdmin, (req, res) => {
-  const rowsFound = all(`SELECT c.*, s.name, s.roll_number, s.year, s.email
+  const rowsFound = all(`SELECT c.*, s.name, s.roll_number, s.department, s.year, s.email, s.phone, s.date student_date
                          FROM certificates c JOIN students s ON s.id = c.student_id
                          WHERE c.event_id = ? ORDER BY c.id`, req.params.id);
   res.json({ certificates: rowsFound });

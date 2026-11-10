@@ -154,8 +154,9 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
       </div>
     </div>
     <div class="card">
-      <table><thead><tr><th style="width:30%">Name</th><th style="width:18%">Roll No.</th>
-        <th style="width:10%">Year</th><th style="width:22%">Email</th><th style="width:14%">Certificate</th><th style="width:6%"></th></tr></thead>
+      <table><thead><tr><th style="width:20%">Name</th><th style="width:14%">Roll No.</th>
+        <th style="width:14%">Department</th><th style="width:8%">Year</th><th style="width:16%">Email / Phone</th>
+        <th style="width:12%">Date</th><th style="width:11%">Certificate</th><th style="width:5%"></th></tr></thead>
         <tbody id="stBody"></tbody></table>
       <div class="hint" id="stCount"></div>
     </div>
@@ -291,18 +292,21 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
   </div>
 </div>
 
-<!-- student edit modal -->
+<!-- student add/edit modal -->
 <div id="stModal" style="position:fixed;inset:0;background:rgba(10,30,18,.55);display:none;z-index:70;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeStEdit()">
-  <div style="background:#fff;border-radius:16px;width:min(460px,94vw);padding:22px 24px;box-shadow:0 16px 44px rgba(0,0,0,.3)">
+  <div style="background:#fff;border-radius:16px;width:min(520px,94vw);padding:22px 24px;box-shadow:0 16px 44px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <b style="color:var(--green);font-size:16px">✎ Edit Student Details</b>
+      <b style="color:var(--green);font-size:16px" id="stModalTitle">✎ Edit Student Details</b>
       <button class="btn" onclick="closeStEdit()">✕</button>
     </div>
-    <div class="grid" style="grid-template-columns:1fr">
-      <div><label>Student name</label><input class="f" id="st_name"></div>
-      <div><label>Roll number</label><input class="f" id="st_roll"></div>
-      <div><label>Year</label><input class="f" id="st_year" placeholder="e.g. 2nd Year"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+      <div style="grid-column:1/-1"><label>Student name *</label><input class="f" id="st_name"></div>
+      <div><label>Roll number *</label><input class="f" id="st_roll"></div>
+      <div><label>Department / Branch</label><input class="f" id="st_dept" placeholder="e.g. CSE / ECE"></div>
+      <div><label>Academic Year</label><input class="f" id="st_year" placeholder="e.g. 2nd Year"></div>
+      <div><label>Event / Issue Date</label><input class="f" id="st_date" placeholder="e.g. 14 November 2026"></div>
       <div><label>Email address</label><input class="f" id="st_email" placeholder="student@example.com"></div>
+      <div><label>Phone / WhatsApp</label><input class="f" id="st_phone" placeholder="+91 98765 43210"></div>
     </div>
     <div id="stInfo" style="margin-top:10px"></div>
     <div style="display:flex;gap:8px;margin-top:16px">
@@ -459,45 +463,75 @@ async function loadStudents() {
     <tr>
       <td><input value="${esc(s.name)}" onchange="saveStudent(${s.id},'name',this.value)"></td>
       <td><input value="${esc(s.roll_number)}" onchange="saveStudent(${s.id},'roll_number',this.value)"></td>
-      <td><input value="${esc(s.year)}" placeholder="—" onchange="saveStudent(${s.id},'year',this.value)"></td>
-      <td><input value="${esc(s.email)}" placeholder="—" onchange="saveStudent(${s.id},'email',this.value)"></td>
+      <td><input value="${esc(s.department)}" placeholder="—" onchange="saveStudent(${s.id},'department',this.value)"></td>
+      <td><input value="${esc(s.year)}" placeholder="—" onchange="saveStudent(${s.id},'year',this.value)" style="width:70px"></td>
+      <td>
+        <input value="${esc(s.email)}" placeholder="email" onchange="saveStudent(${s.id},'email',this.value)">
+        ${s.phone ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">📞 ${esc(s.phone)}</div>` : ""}
+      </td>
+      <td><input value="${esc(s.date)}" placeholder="—" onchange="saveStudent(${s.id},'date',this.value)" style="width:110px"></td>
       <td>${s.cert_category ? `<button class="chip ${CATCLS[s.cert_category] || "cat-p"}" style="border:0;cursor:pointer" title="Click to edit this certificate" onclick="openCertForStudent(${s.id})">✎ ${esc(s.cert_category)}</button>` : `<span style="color:#bbb">— <span style="font-size:10px">no certificate</span></span>`}</td>
       <td class="rowact">
         <button title="Edit all details" onclick="openStEdit(${s.id})">✎</button>
         <button title="Delete" onclick="delStudent(${s.id},'${esc(s.name).replace(/'/g,"\\'")}')">🗑</button>
       </td>
-    </tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">No students found. Add manually or import Excel/CSV.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">No students found. Add manually or import Excel/CSV.</td></tr>`;
   $("stCount").textContent = `${d.students.length} shown · ${d.total} registered in this event`;
 }
 
-/* ---- student edit modal ---- */
+/* ---- student add / edit modal ---- */
 let stEditId = null;
 function openStEdit(id) {
   const s = LAST_STUDENTS.find(x => x.id === id);
   if (!s) return;
   stEditId = id;
+  $("stModalTitle").textContent = "✎ Edit Student Details";
+  $("stSaveBtn").textContent = "💾 Save Changes";
   $("st_name").value = s.name || ""; $("st_roll").value = s.roll_number || "";
-  $("st_year").value = s.year || ""; $("st_email").value = s.email || "";
+  $("st_dept").value = s.department || ""; $("st_year").value = s.year || "";
+  $("st_email").value = s.email || ""; $("st_phone").value = s.phone || "";
+  $("st_date").value = s.date || "";
   $("stInfo").innerHTML =
     (s.cert_category ? `Certificate: <b>${esc(s.cert_category)}</b> (${esc(s.cert_status || "draft")})` : "No certificate assigned yet.")
-    + `<br><span style="color:var(--muted)">Changing name/roll here updates all previews and PDFs of this student automatically.</span>`;
+    + `<br><span style="color:var(--muted)">Saved student details are stored in the database and sync with certificates automatically.</span>`;
   $("stModal").style.display = "flex";
   $("st_name").focus();
 }
+
+function openAdd() {
+  stEditId = null;
+  $("stModalTitle").textContent = "＋ Add New Student";
+  $("stSaveBtn").textContent = "＋ Add Student";
+  $("st_name").value = ""; $("st_roll").value = "";
+  $("st_dept").value = ""; $("st_year").value = "";
+  $("st_email").value = ""; $("st_phone").value = "";
+  $("st_date").value = "";
+  $("stInfo").innerHTML = `<span style="color:var(--muted)">Student will be stored in database for this event.</span>`;
+  $("stModal").style.display = "flex";
+  $("st_name").focus();
+}
+
 function closeStEdit() { $("stModal").style.display = "none"; stEditId = null; }
 async function saveStEdit() {
-  if (!stEditId) return;
   const body = {
     name: $("st_name").value.trim(),
     roll_number: $("st_roll").value.trim(),
+    department: $("st_dept").value.trim(),
     year: $("st_year").value.trim(),
-    email: $("st_email").value.trim()
+    email: $("st_email").value.trim(),
+    phone: $("st_phone").value.trim(),
+    date: $("st_date").value.trim()
   };
   if (!body.name || !body.roll_number) { alert("Student name and roll number are required."); return; }
   const btn = $("stSaveBtn"); btn.disabled = true;
   try {
-    await api(`/api/admin/students/${stEditId}`, { method: "PUT", body: JSON.stringify(body) });
-    toast("Student details saved ✔");
+    if (stEditId) {
+      await api(`/api/admin/students/${stEditId}`, { method: "PUT", body: JSON.stringify(body) });
+      toast("Student details saved ✔");
+    } else {
+      await api(`/api/admin/events/${EV}/students`, { method: "POST", body: JSON.stringify(body) });
+      toast("Student added successfully ✔");
+    }
     closeStEdit(); loadStudents(); loadCerts(); loadDashboard();
   } catch (e) { alert(e.message); }
   btn.disabled = false;
@@ -560,12 +594,7 @@ async function saveCertEdit() {
   } catch (e) { alert(e.message); }
   btn.disabled = false;
 }
-function openAdd() {
-  const n = prompt("Student name:"); if (!n) return;
-  const r = prompt("Roll number:"); if (!r) return;
-  api(`/api/admin/events/${EV}/students`, { method: "POST", body: JSON.stringify({ name: n, roll_number: r }) })
-    .then(t => toast("Student added")).catch(e => alert(e.message)).finally(loadStudents);
-}
+
 async function saveStudent(id, k, v) {
   try { await api(`/api/admin/students/${id}`, { method: "PUT", body: JSON.stringify({ [k]: v }) }); toast("Saved"); }
   catch (e) { alert(e.message); loadStudents(); }
@@ -583,13 +612,19 @@ async function doImport(input) {
   if (!r.ok) alert(d.error || "Import failed"); else toast(`Imported ${d.added} students${d.skipped ? `, skipped ${d.skipped}` : ""}`);
   input.value = ""; loadStudents(); loadDashboard(); loadCerts();
 }
+
 function exportCSV() {
   api(`/api/admin/events/${EV}/students`).then(d => {
-    const rows = [["Name","Roll Number","Year","Email","Certificate Category","Status"]];
-    d.students.forEach(s => rows.push([s.name, s.roll_number, s.year, s.email, s.cert_category || "", s.cert_status || ""]));
+    const rows = [["Name","Roll Number","Department","Year","Email","Phone","Date","Certificate Category","Status","Certificate ID","Registered On"]];
+    d.students.forEach(s => rows.push([
+      s.name, s.roll_number, s.department || "", s.year || "", s.email || "", s.phone || "", s.date || "",
+      s.cert_category || "", s.cert_status || "", s.cert_uid || "", s.created_at || ""
+    ]));
     const csv = rows.map(r => r.map(c => `"${String(c || "").replace(/"/g,'""')}"`).join(",")).join("\r\n");
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "students.csv"; a.click();
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    a.download = `students_event_${EV}_all_data.csv`;
+    a.click();
   });
 }
 

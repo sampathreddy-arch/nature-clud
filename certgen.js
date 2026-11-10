@@ -106,7 +106,7 @@ function renderCertHTML(d) {
     <div class="intro">${esc(intro)}</div>
     <div class="recipient" id="cert-name">${esc(d.student.name)}</div>
     <div class="nameline"></div>
-    <div class="body-text">${ach} in &ldquo;<span class="event-name">${esc(d.event.title)}</span>&rdquo; held on ${esc(d.event.event_date)}.</div>
+    <div class="body-text">${ach} in &ldquo;<span class="event-name">${esc(d.event.title)}</span>&rdquo; held on ${esc(d.student.date || d.event.event_date)}.</div>
     ${winner ? `<div class="award-badge"><span>${a.emoji}</span> ${esc(a.badge)}</div>` : ""}
     <div class="signrow">
       ${sigBlock(d.sig1, d.event.sig1_role, "Faculty Coordinator")}
@@ -181,7 +181,7 @@ function generatePDF(d) {
       ? `for securing the ${d.category}`
       : "for active and enthusiastic participation";
     if (d.student.year) ach += ` (${d.student.year})`;
-    ach += ` in "${d.event.title}" held on ${d.event.event_date}.`;
+    ach += ` in "${d.event.title}" held on ${d.student.date || d.event.event_date}.`;
 
     doc.font("Helvetica").fontSize(10.5).fillColor("#3c4d3c");
     doc.text(ach, 90, y, { width: W - 180, align: "center", lineGap: 3 });

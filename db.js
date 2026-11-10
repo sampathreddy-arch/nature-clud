@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS students (
   department  TEXT DEFAULT '',
   year        TEXT DEFAULT '',
   email       TEXT DEFAULT '',
+  phone       TEXT DEFAULT '',
+  date        TEXT DEFAULT '',
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (event_id, roll_number)
 );
@@ -72,6 +74,7 @@ CREATE TABLE IF NOT EXISTS certificates (
   event_id      INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   category      TEXT NOT NULL DEFAULT 'Participation',  -- Participation | First Prize | Second Prize | Third Prize
   status        TEXT NOT NULL DEFAULT 'draft', -- draft | approved | published
+  issue_date    TEXT DEFAULT '',
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   published_at  TEXT,
   UNIQUE (student_id, event_id)                -- one certificate per student per event (no duplicates)
@@ -105,6 +108,11 @@ function safeAlter(sql) { try { db.exec(sql); } catch (e) { if (!String(e.messag
   /* template wording columns (admin-editable) */
   safeAlter("ALTER TABLE events ADD COLUMN heading TEXT DEFAULT 'CERTIFICATE'");
   safeAlter("ALTER TABLE events ADD COLUMN intro TEXT DEFAULT 'This certificate is proudly presented to'");
+  /* comprehensive student and certificate date/data columns */
+  safeAlter("ALTER TABLE students ADD COLUMN department TEXT DEFAULT ''");
+  safeAlter("ALTER TABLE students ADD COLUMN phone TEXT DEFAULT ''");
+  safeAlter("ALTER TABLE students ADD COLUMN date TEXT DEFAULT ''");
+  safeAlter("ALTER TABLE certificates ADD COLUMN issue_date TEXT DEFAULT ''");
   const bcrypt = require("bcryptjs");
   if (!row("SELECT id FROM admins LIMIT 1")) {
     run("INSERT INTO admins (username, password_hash) VALUES (?, ?)",

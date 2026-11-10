@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificate Verification | Nature Club</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+ background:linear-gradient(160deg,#eef6ee,#fdfefb 60%,#e6f2e7);color:#22322a}
+.box{max-width:420px;width:100%;background:#fff;border:1px solid #dce8dd;border-radius:18px;box-shadow:0 10px 34px rgba(31,92,54,.12);overflow:hidden}
+.head{background:linear-gradient(135deg,#1f5c36,#2e7d4f);color:#fff;padding:22px;text-align:center}
+.head .l{font-size:30px}
+.head h1{font-size:15px;margin-top:4px;letter-spacing:.4px}
+.body{padding:24px}
+.status{text-align:center;padding:12px;border-radius:12px;font-weight:700;font-size:14px;margin-bottom:18px}
+.valid{background:#e7f6e9;color:#1d6d33;border:1px solid #b7dfbd}
+.invalid{background:#fdecec;color:#9b2c2c;border:1px solid #f3bcbc}
+.row{display:flex;justify-content:space-between;gap:14px;padding:9px 2px;border-bottom:1px dashed #e3ede3;font-size:13.5px}
+.row:last-child{border-bottom:0}
+.k{color:#5d7160;flex-shrink:0}.v{font-weight:600;text-align:right}
+.badge{display:inline-block;padding:3px 12px;border-radius:30px;font-weight:700;font-size:12px;color:#fff;background:#1f5c36}
+.logo{font-size:34px;text-align:center;margin-bottom:4px}
+.loading{text-align:center;color:#5d7160;padding:30px;font-size:13.5px}
+.foot{text-align:center;font-size:10.5px;color:#8a9a8c;padding:0 20px 20px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="head">
+    <div class="l">🌿</div>
+    <h1>Certificate Verification</h1>
+    <div style="font-size:11px;opacity:.8;margin-top:2px" id="inst">Aurora Higher Education and Research Academy – Bhongir Campus</div>
+  </div>
+  <div class="body">
+    <div class="loading" id="loading">Verifying certificate…</div>
+    <div id="result" style="display:none"></div>
+  </div>
+  <div class="foot">Nature Club • Think Green • Play Smart • Save Earth</div>
+</div>
+<script>
+const TOKEN = location.pathname.split("/").pop();
+(async () => {
+  try {
+    const r = await fetch(`/api/verify/${TOKEN}`);
+    const d = await r.json();
+    const el = document.getElementById("result");
+    document.getElementById("loading").style.display = "none";
+    if (d.institute) document.getElementById("inst").textContent = d.institute;
+    if (!d.valid) {
+      el.innerHTML = `<div class="status invalid">❌ INVALID CERTIFICATE</div>
+        <p style="font-size:13px;color:#5d7160;text-align:center;line-height:1.6">${d.message || "This QR code does not match any published certificate."}</p>`;
+      el.style.display = "block"; return;
+    }
+    el.innerHTML = `
+      <div class="status valid">✔️ VALID CERTIFICATE</div>
+      <div class="logo">🎓</div>
+      <div class="row"><span class="k">Name</span><span class="v">${esc(d.name)}</span></div>
+      <div class="row"><span class="k">Certificate ID</span><span class="v">${esc(d.cert_uid)}</span></div>
+      <div class="row"><span class="k">Type</span><span class="v"><span class="badge">${esc(d.category)}</span></span></div>
+      <div class="row"><span class="k">Event</span><span class="v">${esc(d.event_title)}</span></div>
+      <div class="row"><span class="k">Date</span><span class="v">${esc(d.event_date)}</span></div>
+      <div class="row"><span class="k">Organiser</span><span class="v">${esc(d.organiser)}</span></div>`;
+    el.style.display = "block";
+    document.title = `Verify ${d.cert_uid} | ${d.name}`;
+  } catch {
+    document.getElementById("loading").textContent = "Network error — try again.";
+  }
+})();
+function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+</script>
+</body>
+</html>

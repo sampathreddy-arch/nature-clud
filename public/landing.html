@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nature Club – E-Certificate Portal</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{min-height:100vh;font-family:'Segoe UI',system-ui,sans-serif;color:#22322a;display:flex;align-items:center;justify-content:center;
+ background:linear-gradient(160deg,#eef6ee 0%,#f8fbf5 55%,#e2f0e4 100%)}
+.wrap{text-align:center;padding:40px 20px;max-width:720px;width:100%}
+.logo{font-size:52px}
+h1{font-size:26px;color:#1f5c36;margin:8px 0 4px}
+.sub{color:#5a6f5e;font-size:14px;margin-bottom:34px}
+.cards{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
+.card{background:#fff;border:1px solid #dfe8df;border-radius:18px;padding:30px 28px;width:280px;box-shadow:0 6px 24px rgba(31,92,54,.08);transition:.2s}
+.card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(31,92,54,.14)}
+.card .ic{font-size:40px}
+.card h2{font-size:17px;color:#1f5c36;margin:12px 0 6px}
+.card p{font-size:13px;color:#5a6f5e;margin-bottom:18px;line-height:1.5}
+.card a{display:inline-block;background:#1f5c36;color:#fff;text-decoration:none;padding:10px 22px;border-radius:10px;font-size:14px;font-weight:600}
+.card a:hover{background:#2e7d4f}
+.foot{margin-top:36px;font-size:12px;color:#8a9a8c}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">🌿</div>
+  <h1>Nature Club – E-Certificate Portal</h1>
+  <p class="sub">Aurora Higher Education and Research Academy – Bhongir Campus<br>ECO GAMES – PLAY FOR THE PLANET · 14 November 2026</p>
+  <div class="cards">
+    <div class="card">
+      <div class="ic">🛡️</div>
+      <h2>Administrator</h2>
+      <p>Manage students, events, certificate design,<br>publishing and portal QR codes.</p>
+      <a href="/admin">Admin Login</a>
+    </div>
+    <div class="card">
+      <div class="ic">🎓</div>
+      <h2>Students</h2>
+      <p>Scan the QR code displayed at the venue,<br>then search and download your e-certificate.</p>
+      <a href="#" onclick="goPortal()">Student Portal</a>
+    </div>
+  </div>
+  <p class="foot">Think Green • Play Smart • Save Earth</p>
+</div>
+<script>
+function goPortal(){
+  fetch('/api/portal/list-active').then(r=>r.json()).then(d=>{
+    if(d.active && d.active.length===1) location.href='/portal/'+d.active[0].token;
+    else if(d.active && d.active.length>1){
+      const i=prompt('Active portals:\n'+d.active.map((a,n)=>`${n+1}. ${a.title}`).join('\n')+'\nEnter number:');
+      const n=parseInt(i); if(n>=1&&n<=d.active.length) location.href='/portal/'+d.active[n-1].token;
+    } else alert('No active student portal right now. Scan the QR code at the venue.');
+  });
+}
+</script>
+</body>
+</html>

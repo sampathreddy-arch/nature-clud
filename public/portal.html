@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-Certificate Portal | Nature Club</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--green:#1f5c36;--green2:#2e7d4f;--gold:#b8860b;--muted:#5d7160;--line:#dce8dd}
+body{font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;color:#22322a;
+ background:linear-gradient(180deg,#f2f8f1 0%,#ffffff 45%,#e9f4ea 100%)}
+header{background:linear-gradient(135deg,var(--green) 0%,var(--green2) 100%);color:#fff;padding:26px 16px 30px;text-align:center;position:relative}
+header .leaf{font-size:34px}
+header h1{font-size:17px;letter-spacing:.4px;margin-top:4px}
+header .inst{font-size:12.5px;opacity:.85;margin-top:3px}
+main{max-width:640px;margin:-16px auto 0;padding:0 14px 60px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 26px rgba(31,92,54,.09);padding:22px;margin-top:16px}
+.evbadge{display:inline-block;background:#fff8e1;color:#8a6d0a;font-size:11.5px;font-weight:600;padding:4px 12px;border-radius:30px;letter-spacing:.6px}
+h2{font-size:19px;color:var(--green);margin:10px 0 2px}
+.sub{font-size:12.5px;color:var(--muted)}
+.welcome{font-size:13.5px;line-height:1.6;color:#33453a}
+.step{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+.step b{background:var(--green);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px}
+.searchbox{display:flex;gap:8px}
+.searchbox input{flex:1;font-size:16px;padding:13px 16px;border:1.5px solid var(--line);border-radius:12px;outline:none;background:#fbfdfb}
+.searchbox input:focus{border-color:var(--green2);background:#fff}
+.searchbox button{all:unset;cursor:pointer;background:var(--green);color:#fff;padding:0 20px;border-radius:12px;font-weight:600;font-size:14px}
+.searchbox button:hover{background:var(--green2)}
+.hints{font-size:11.5px;color:var(--muted);margin-top:8px}
+.results{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.result{padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;cursor:pointer;transition:.15s;background:#fdfffd}
+.result:hover{border-color:var(--green2);background:#f4faf4}
+.result .nm{font-weight:600;font-size:15px}
+.result .rl{font-size:12px;color:var(--muted);margin-top:2px}
+.none{font-size:13px;color:var(--muted);padding:14px 4px;text-align:center}
+.confirm .row{display:flex;justify-content:space-between;padding:9px 2px;border-bottom:1px dashed var(--line);font-size:13.5px}
+.confirm .row:last-child{border-bottom:0}
+.confirm .k{color:var(--muted)}
+.confirm .v{font-weight:600;text-align:right}
+.bigbtn{all:unset;display:block;width:100%;text-align:center;background:linear-gradient(135deg,var(--green2),var(--green));color:#fff;
+ font-size:16px;font-weight:700;padding:15px;border-radius:13px;cursor:pointer;margin-top:16px;letter-spacing:.3px}
+.bigbtn:hover{filter:brightness(1.08)}
+.bigbtn:disabled{opacity:.55;cursor:wait}
+.prevwrap{margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#3a4d3a}
+.prevwrap iframe{width:100%;height:62vh;border:0;background:#fff}
+.cat{display:inline-block;padding:4px 14px;border-radius:30px;font-size:12px;font-weight:700;color:#fff;background:var(--green)}
+.linklike{background:none;border:none;color:var(--green2);font-weight:600;cursor:pointer;font-size:13.5px;padding:8px 2px}
+footer{text-align:center;font-size:11.5px;color:#8a9a8c;padding:20px 10px 34px}
+.err{background:#fdecec;color:#8a2b2b;border:1px solid #f3bcbc;padding:10px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+.okbadge{background:#e8f6e9;color:#1f5c36;border:1px solid #bcd9bf;padding:10px 14px;border-radius:10px;font-size:13px;margin-top:12px}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:r 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes r{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="leaf">🌿</div>
+  <h1 id="hTitle">E-Certificate Portal</h1>
+  <div class="inst" id="hInst">Aurora Higher Education and Research Academy – Bhongir Campus</div>
+</header>
+
+<main>
+  <!-- STEP 1: welcome + event info -->
+  <div class="card" id="stepWelcome">
+    <span class="evbadge" id="evDate">14 November 2026</span>
+    <h2 id="evTitle">Loading…</h2>
+    <p class="sub" id="evOrg">Organised by Nature Club</p>
+    <p class="welcome" style="margin-top:12px" id="welcomeMsg">
+      Welcome! 🎉 Find your <b>ECO GAMES – PLAY FOR THE PLANET</b> e-certificate here.
+      Search your name or roll number, confirm your details and download your certificate — no account needed.
+    </p>
+  </div>
+
+  <!-- STEP 2: search -->
+  <div class="card" id="stepSearch" style="display:none">
+    <div class="step"><b>1</b> Find your name</div>
+    <div class="searchbox">
+      <input id="q" placeholder="Search name or roll number…" autocomplete="off" autofocus>
+      <button onclick="doSearch(true)">Search</button>
+    </div>
+    <div class="hints">💡 Type at least 2 letters — e.g. “rahul” or “B22”.</div>
+    <div class="results" id="results"></div>
+    <div class="err" id="searchErr" style="display:none"></div>
+  </div>
+
+  <!-- STEP 3: confirmation -->
+  <div class="card confirm" id="stepConfirm" style="display:none">
+    <div class="step"><b>2</b> Is this you?</div>
+    <div class="row"><span class="k">Name</span><span class="v" id="cName"></span></div>
+    <div class="row"><span class="k">Roll Number</span><span class="v" id="cRoll"></span></div>
+    <div class="row"><span class="k">Year</span><span class="v" id="cYear"></span></div>
+    <div class="row"><span class="k">Certificate</span><span class="v"><span class="cat" id="cCat"></span></span></div>
+    <button class="bigbtn" onclick="showCert()">✅ Yes — Show my certificate</button>
+    <div style="text-align:center"><button class="linklike" onclick="backSearch()">← Not me, search again</button></div>
+  </div>
+
+  <!-- STEP 4: preview + download -->
+  <div class="card" id="stepCert" style="display:none">
+    <div class="step"><b>3</b> Download your certificate</div>
+    <div class="prevwrap"><iframe id="prevFrame" title="Certificate preview"></iframe></div>
+    <button class="bigbtn" id="dlBtn" onclick="downloadCert()">⬇️ &nbsp;DOWNLOAD MY E-CERTIFICATE</button>
+    <div style="text-align:center"><button class="linklike" onclick="backSearch()">← Download another certificate</button></div>
+  </div>
+
+  <footer>Nature Club · Aurora Higher Education and Research Academy – Bhongir Campus<br>
+  Think Green • Play Smart • Save Earth</footer>
+</main>
+
+<script>
+const TOKEN = __TOKEN__;
+let PORTAL_OK = false, selected = null, certUrl = null, cat = "";
+
+const $ = (id) => document.getElementById(id);
+function show(step) {
+  ["stepWelcome","stepSearch","stepConfirm","stepCert"].forEach(s => $(s).style.display = "none");
+  $(step).style.display = "block";
+  if (step !== "stepCert") window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function backSearch(){ selected = null; certUrl = null; $("prevFrame").src="about:blank"; $("results").innerHTML=""; $("q").value=""; show("stepSearch"); $("q").focus(); }
+
+/* load event info */
+(async () => {
+  try {
+    const r = await fetch(`/api/portal/${TOKEN}`);
+    const d = await r.json();
+    if (!r.ok) { $("evTitle").textContent = "Portal unavailable"; $("welcomeMsg").textContent = d.error || "Please contact the Nature Club office."; $("evDate").style.display="none"; $("evOrg").textContent=""; return; }
+    PORTAL_OK = true;
+    $("hTitle").textContent = d.event.title;
+    $("hInst").textContent = d.event.institute;
+    $("evTitle").textContent = d.event.title;
+    $("evDate").textContent = d.event.event_date;
+    $("evOrg").textContent = `Organised by ${d.event.organiser}`;
+  } catch { $("welcomeMsg").textContent = "Network error — please check your connection."; return; }
+  show("stepSearch"); $("q").focus();
+
+  let t = null;
+  $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(doSearch, 350); });
+  $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(true); });
+})();
+
+async function doSearch(immediate) {
+  if (!PORTAL_OK) return;
+  const q = $("q").value.trim();
+  const box = $("results"), err = $("searchErr");
+  if (q.length < 2) { box.innerHTML = ""; err.style.display = "none"; return; }
+  box.innerHTML = `<div class="none">Searching…</div>`; err.style.display = "none";
+  try {
+    const r = await fetch(`/api/portal/${TOKEN}/search?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Search failed");
+    if (!d.results.length) { box.innerHTML = `<div class="none">No published certificate found for “${esc(q)}”.<br>Missing your name? Contact the Nature Club coordinator.</div>`; return; }
+    box.innerHTML = d.results.map(p => `
+      <div class="result" onclick='pick(${JSON.stringify(JSON.stringify(p))})'>
+        <div class="nm">${esc(p.name)}</div>
+        <div class="rl">${esc(p.roll_number)}${p.year ? " · " + esc(p.year) : ""}</div>
+      </div>`).join("");
+  } catch (ex) { box.innerHTML = ""; err.textContent = ex.message; err.style.display = "block"; }
+}
+
+function pick(json) {
+  selected = JSON.parse(json);
+  $("cName").textContent = selected.name;
+  $("cRoll").textContent = selected.roll_number;
+  $("cYear").textContent = selected.year || "—";
+  $("cCat").textContent = "Loading…";
+  show("stepConfirm");
+  fetch(`/api/portal/${TOKEN}/certinfo/${selected.id}`).then(r => r.json()).then(d => {
+    if (d.ok) { $("cCat").textContent = d.category; selected.token = d.token; }
+  });
+}
+function showCert() {
+  show("stepCert");
+  certUrl = `/api/portal/${TOKEN}/preview/${selected.token}`;
+  $("prevFrame").src = certUrl;
+  $("dlBtn").disabled = false;
+}
+async function downloadCert() {
+  if (!selected?.token) return;
+  const btn = $("dlBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span>Preparing PDF…`;
+  try {
+    const r = await fetch(`/api/portal/${TOKEN}/download/${selected.token}`);
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "Download failed"); }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Certificate_${selected.name.replace(/[^a-z0-9]+/gi, "_")}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    btn.innerHTML = "✅ Downloaded! (check your Downloads folder)";
+    setTimeout(() => { btn.innerHTML = "⬇️ &nbsp;DOWNLOAD MY E-CERTIFICATE"; btn.disabled = false; }, 3500);
+  } catch (ex) {
+    alert(ex.message); btn.innerHTML = "⬇️ &nbsp;DOWNLOAD MY E-CERTIFICATE"; btn.disabled = false;
+  }
+}
+function esc(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+</script>
+</body>
+</html>

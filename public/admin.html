@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Panel | Nature Club – E-Certificate Portal</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--green:#1f5c36;--green2:#2e7d4f;--gold:#b8860b;--bg:#eef3ee;--panel:#fff;--ink:#22322a;--muted:#6b7d6b;--line:#dfe8df}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+/* ---------- login ---------- */
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#dcecdf,#f7fbf5 55%,#cfe6d2);z-index:50}
+.loginbox{background:#fff;border-radius:18px;padding:36px 34px;width:min(380px,92vw);box-shadow:0 14px 44px rgba(31,92,54,.18);text-align:center}
+.loginbox .l{font-size:44px}
+.loginbox h1{font-size:19px;color:var(--green);margin:6px 0 2px}
+.loginbox p{font-size:12px;color:var(--muted);margin-bottom:22px}
+.loginbox input{width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:11px;font-size:14.5px;margin-bottom:12px;outline:none}
+.loginbox input:focus{border-color:var(--green2)}
+.loginbox button{width:100%;padding:12px;border:0;border-radius:11px;background:var(--green);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.loginbox button:hover{background:var(--green2)}
+.lerr{color:#9b2c2c;font-size:12.5px;margin-top:10px;display:none}
+/* ---------- shell ---------- */
+#app{display:none;min-height:100vh}
+aside{width:232px;background:var(--green);color:#eaf5ec;position:fixed;top:0;bottom:0;left:0;display:flex;flex-direction:column;z-index:10}
+.logo{padding:20px 18px 14px;border-bottom:1px solid rgba(255,255,255,.15)}
+.logo .leaf{font-size:28px}
+.logo h2{font-size:15.5px;margin-top:3px}
+.logo p{font-size:10.5px;opacity:.72;margin-top:2px}
+nav{padding:12px 10px;display:flex;flex-direction:column;gap:5px}
+nav button{all:unset;cursor:pointer;padding:10.5px 14px;border-radius:10px;font-size:13.5px;color:#d7e8da;display:flex;gap:10px;align-items:center}
+nav button:hover{background:rgba(255,255,255,.08)}
+nav button.active{background:var(--panel);color:var(--green);font-weight:600}
+.sidefoot{margin-top:auto;padding:12px 14px;font-size:10.5px;opacity:.75;line-height:1.5;border-top:1px solid rgba(255,255,255,.12)}
+.sidefoot a{color:#ffd97a;cursor:pointer;text-decoration:underline}
+main{margin-left:232px;padding:22px 26px 60px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.topbar h1{font-size:21px;color:var(--green)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+.btn{cursor:pointer;border:1px solid var(--line);background:#fff;padding:8.5px 15px;border-radius:9px;font-size:13px;font-weight:600;color:var(--ink)}
+.btn:hover{border-color:var(--green2);color:var(--green)}
+.btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+.btn.primary:hover{background:var(--green2);color:#fff}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:#fff}
+.btn.danger{color:#a33}.btn.danger:hover{border-color:#c66}
+.btn:disabled{opacity:.5;cursor:wait}
+.panel{display:none}.panel.show{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+.card h3{font-size:13.5px;color:var(--green);margin-bottom:12px;letter-spacing:.4px}
+.hint{font-size:11.5px;color:var(--muted);margin-top:6px}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:linear-gradient(150deg,#fff,#f3f9f3);border:1px solid var(--line);border-radius:14px;padding:16px}
+.stat .n{font-size:28px;font-weight:800;color:var(--green)}
+.stat .t{font-size:11.5px;color:var(--muted);margin-top:3px;letter-spacing:.4px;text-transform:uppercase}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;padding:7px 8px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:6px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:hover td{background:#f7faf7}
+td input{width:100%;border:1px solid transparent;background:transparent;padding:6px 7px;border-radius:7px;font-size:13px;font-family:inherit}
+td input:focus{border-color:var(--green2);background:#fff;outline:none}
+.chip{display:inline-block;padding:3px 11px;border-radius:30px;font-size:11px;font-weight:700}
+.chip.draft{background:#f0f0f0;color:#666}.chip.approved{background:#e8f0fb;color:#2857a3}.chip.published{background:#e2f4e4;color:#1d6d33}
+.cat-p{background:#eef5ee;color:#38614c}.cat-f{background:#fff3cd;color:#8a6d0a}.cat-s{background:#e8eef7;color:#2857a3}.cat-t{background:#fde8d8;color:#a85a1c}
+.rowact{white-space:nowrap;text-align:right}
+.rowact button{all:unset;cursor:pointer;padding:5px 8px;border-radius:7px;color:#888;font-size:13px}
+.rowact button:hover{background:#eee;color:#333}
+/* forms */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:13px 18px}
+.grid .full{grid-column:1/-1}
+label{display:block;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;margin-bottom:5px;text-transform:uppercase}
+input.f,select.f,textarea.f{width:100%;padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;font-size:13.5px;font-family:inherit;background:#fcfdfc}
+input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:#fff}
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(10,30,18,.55);display:none;z-index:60;align-items:center;justify-content:center;padding:20px}
+#modal .mbox{background:#fff;border-radius:16px;max-width:1100px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+#modal .mhead{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);background:#f7faf7}
+#modal .mhead b{color:var(--green);font-size:14.5px}
+#modal iframe{flex:1;border:0;background:#3a4d3a}
+/* qr */
+.qrwrap{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.qrwrap img{border:1px solid var(--line);border-radius:12px;width:230px;height:230px;background:#fff}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:11px 22px;border-radius:30px;font-size:13.5px;opacity:0;transition:.3s;z-index:99;pointer-events:none}
+.toast.show{opacity:1}
+.msg{padding:10px 14px;border-radius:10px;font-size:12.5px;margin-top:10px}
+.msg.ok{background:#e8f6e9;color:#1d6d33;border:1px solid #bcd9bf}
+.msg.bad{background:#fdecec;color:#9b2c2c;border:1px solid #f3bcbc}
+@media(max-width:900px){aside{width:100%;height:auto;position:relative;flex-direction:column} nav{flex-direction:row;overflow-x:auto} main{margin-left:0} .grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="login">
+  <div class="loginbox">
+    <div class="l">🛡️</div>
+    <h1>Admin Login</h1>
+    <p>Nature Club – E-Certificate Portal<br>Aurora Higher Education and Research Academy, Bhongir Campus</p>
+    <input id="lu" placeholder="Username" autocomplete="username">
+    <input id="lp" type="password" placeholder="Password" autocomplete="current-password">
+    <button onclick="doLogin()">Sign In</button>
+    <div class="lerr" id="lerr"></div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+<aside>
+  <div class="logo">
+    <div class="leaf">🌿</div>
+    <h2>E-Certificate Portal</h2>
+    <p>Nature Club · Bhongir Campus</p>
+  </div>
+  <nav>
+    <button data-p="dashboard" class="active">📊 Dashboard</button>
+    <button data-p="students">👥 Students</button>
+    <button data-p="event">🏛️ Event &amp; Design</button>
+    <button data-p="certs">🎓 Certificates</button>
+    <button data-p="portal">🔗 Portal QR</button>
+    <button data-p="account">🔑 Account</button>
+  </nav>
+  <div class="sidefoot">Signed in as <b id="whoami">admin</b><br><a onclick="doLogout()">Logout →</a></div>
+</aside>
+
+<main>
+  <!-- DASHBOARD -->
+  <section class="panel show" id="p-dashboard">
+    <div class="topbar"><h1>Dashboard</h1>
+      <div class="toolbar"><select class="f" id="evSelDash" style="width:auto" onchange="EV=+this.value;loadAll()"></select></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n" id="stStudents">0</div><div class="t">Registered Students</div></div>
+      <div class="stat"><div class="n" id="stCerts">0</div><div class="t">Certificates Generated</div></div>
+      <div class="stat"><div class="n" id="stPart">0</div><div class="t">Participation Certificates</div></div>
+      <div class="stat"><div class="n" id="stWin">0</div><div class="t">Winner Certificates</div></div>
+      <div class="stat"><div class="n" id="stDl">0</div><div class="t">Certificates Downloaded</div></div>
+    </div>
+    <div class="card"><h3>Quick status</h3>
+      <div id="quickLines" style="font-size:13px;color:var(--muted);line-height:1.8"></div>
+    </div>
+  </section>
+
+  <!-- STUDENTS -->
+  <section class="panel" id="p-students">
+    <div class="topbar"><h1>Student Management</h1>
+      <div class="toolbar">
+        <input class="f" id="stSearch" placeholder="🔍 Search name or roll number…" style="width:220px">
+        <button class="btn primary" onclick="openAdd()">＋ Add Student</button>
+        <label class="btn" style="display:inline-block">📥 Import Excel / CSV
+          <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="doImport(this)"></label>
+        <button class="btn" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+    <div class="card">
+      <table><thead><tr><th style="width:30%">Name</th><th style="width:18%">Roll No.</th>
+        <th style="width:10%">Year</th><th style="width:22%">Email</th><th style="width:14%">Certificate</th><th style="width:6%"></th></tr></thead>
+        <tbody id="stBody"></tbody></table>
+      <div class="hint" id="stCount"></div>
+    </div>
+  </section>
+
+  <!-- EVENT & DESIGN -->
+  <section class="panel" id="p-event">
+    <div class="topbar"><h1>Event Management &amp; Certificate Design</h1>
+      <div class="toolbar"><button class="btn primary" onclick="saveEvent()">💾 Save Event</button></div>
+    </div>
+    <div class="card"><h3>Event Details</h3>
+      <div class="grid">
+        <div class="full"><label>Event title</label><input class="f" id="e_title"></div>
+        <div><label>Event date</label><input class="f" id="e_event_date"></div>
+        <div><label>Organising club / department</label><input class="f" id="e_organiser"></div>
+        <div><label>Institution name (on certificate header)</label><input class="f" id="e_institute"></div>
+        <div><label>Certificate ID prefix</label><input class="f" id="e_cert_prefix"></div>
+        <div class="full"><label>Motto / footer line</label><input class="f" id="e_motto"></div>
+        <div class="full"><label>Issued-on line (footer)</label><input class="f" id="e_issued_line"></div>
+        <div><label>Certificate heading (large word)</label><input class="f" id="e_heading"></div>
+        <div><label>Intro line above the name</label><input class="f" id="e_intro"></div>
+      </div>
+    </div>
+    <div class="card"><h3>Certificate Assets (up to 4 MB each)</h3>
+      <div class="grid">
+        <div><label>Institution logo</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="btn" style="display:inline-block">Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('logo',this)"></label>
+            <img id="pl_logo" style="height:44px;border-radius:6px;border:1px solid var(--line)" onerror="this.style.display='none'">
+            <button class="btn danger" onclick="delAsset('logo')">✕</button>
+          </div></div>
+        <div><label>Signature – <span id="lb_s1">Coordinator</span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="btn" style="display:inline-block">Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('sig1',this)"></label>
+            <input class="f" id="e_sig1_role" placeholder="Role, e.g. Faculty Coordinator" style="width:200px">
+            <img id="pl_sig1" style="height:34px;border-radius:6px;border:1px solid var(--line)" onerror="this.style.display='none'">
+            <button class="btn danger" onclick="delAsset('sig1')">✕</button>
+          </div></div>
+        <div><label>Signature – <span id="lb_s2">Principal</span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="btn" style="display:inline-block">Upload<input type="file" accept="image/*" style="display:none" onchange="upAsset('sig2',this)"></label>
+            <input class="f" id="e_sig2_role" placeholder="Role, e.g. Principal" style="width:200px">
+            <img id="pl_sig2" style="height:34px;border-radius:6px;border:1px solid var(--line)" onerror="this.style.display='none'">
+            <button class="btn danger" onclick="delAsset('sig2')">✕</button>
+          </div></div>
+        <div style="display:flex;align-items:end"><button class="btn gold" onclick="openPreview(-1)">👁 Preview design (first certificate)</button></div>
+      </div>
+      <div class="hint">Upload a scanned PNG/JPG of the actual signature (transparent background recommended). Role text appears under the signature line.</div>
+    </div>
+  </section>
+
+  <!-- CERTIFICATES -->
+  <section class="panel" id="p-certs">
+    <div class="topbar"><h1>Certificate Preparation &amp; Publishing</h1>
+      <div class="toolbar">
+        <button class="btn" onclick="loadCerts()">↻ Refresh</button>
+        <button class="btn primary" onclick="approveSel()">✔ Approve selected</button>
+        <button class="btn gold" onclick="publishSel()">🚀 Publish selected</button>
+        <button class="btn" onclick="location.href=`/api/admin/events/${EV}/preview-all`">👁 Preview all</button>
+        <button class="btn" onclick="location.href=`/api/admin/events/${EV}/zip`">🗜 Download ZIP</button>
+      </div>
+    </div>
+    <div class="card"><h3>1 · Assign a category to students</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select class="f" id="bulkCat" style="width:200px">
+          <option>Participation</option><option>First Prize</option><option>Second Prize</option><option>Third Prize</option>
+        </select>
+        <button class="btn primary" onclick="bulkAssign()">＋ Assign to selected students →</button>
+        <span class="hint" style="margin:0">or change a student's certificate below</span>
+      </div>
+      <div class="card" style="margin:12px 0 0;background:#fbfdfb;padding:12px 14px">
+        <table><thead><tr><th style="width:36px"><input type="checkbox" id="cbAll" onchange="checkAll(this)"></th><th>Name</th><th>Roll No.</th><th>Certificate ID</th><th>Category</th><th>Status</th><th></th></tr></thead>
+        <tbody id="cBody"></tbody></table>
+      </div>
+      <div class="hint">Flow: <b>Draft → Approved → Published</b>. Students can download only <b>Published</b> certificates.</div>
+    </div>
+  </section>
+
+  <!-- PORTAL QR -->
+  <section class="panel" id="p-portal">
+    <div class="topbar"><h1>Student Portal &amp; Shared QR Code</h1></div>
+    <div class="card">
+      <div class="qrwrap">
+        <img id="qrImg" alt="Portal QR" onerror="this.style.opacity=.25">
+        <div style="flex:1;min-width:260px">
+          <label>Portal link (inside the QR)</label>
+          <div style="display:flex;gap:8px;margin:4px 0 14px;flex-wrap:wrap">
+            <input class="f" id="portalUrl" readonly style="flex:1;min-width:240px">
+            <button class="btn" onclick="navigator.clipboard.writeText(PURL);toast('Link copied')">Copy</button>
+            <a class="btn" id="qrDl" download="portal-qr.png">⬇ Download PNG</a>
+            <button class="btn" onclick="printQR()">🖨 Print</button>
+          </div>
+          <label>Portal status</label>
+          <div style="display:flex;gap:10px;align-items:center;margin:4px 0 14px">
+            <button class="btn" id="portalToggle" onclick="togglePortal()"></button>
+            <button class="btn danger" onclick="regenToken()">♻ Regenerate link</button>
+          </div>
+          <div class="msg ok" style="margin-top:0">One shared QR for <b>all students</b> — it opens the portal.<br>
+          Students scan → search their name → confirm → download. Each certificate still carries its own <b>verification QR</b>.</div>
+          <div class="hint">Put this QR on the event banner / display screens at the venue. Only <b>Published</b> certificates appear in the portal.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCOUNT -->
+  <section class="panel" id="p-account">
+    <div class="topbar"><h1>Account Settings</h1></div>
+    <div class="card"><h3>Change password</h3>
+      <div class="grid">
+        <div><label>Current password</label><input class="f" type="password" id="cw_cur"></div>
+        <div><label>New password (min 8 characters)</label><input class="f" type="password" id="cw_new"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn primary" onclick="changePw()">Save new password</button>
+        <button class="btn danger" onclick="doLogout()">Logout</button>
+      </div>
+      <div id="pwMsg"></div>
+    </div>
+  </section>
+</main>
+</div>
+
+<!-- preview modal -->
+<div id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="mbox">
+    <div class="mhead"><b id="mTitle">Preview</b><button class="btn" onclick="closeModal()">✕ Close</button></div>
+    <iframe id="mFrame" title="preview"></iframe>
+  </div>
+</div>
+
+<!-- student edit modal -->
+<div id="stModal" style="position:fixed;inset:0;background:rgba(10,30,18,.55);display:none;z-index:70;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeStEdit()">
+  <div style="background:#fff;border-radius:16px;width:min(460px,94vw);padding:22px 24px;box-shadow:0 16px 44px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <b style="color:var(--green);font-size:16px">✎ Edit Student Details</b>
+      <button class="btn" onclick="closeStEdit()">✕</button>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr">
+      <div><label>Student name</label><input class="f" id="st_name"></div>
+      <div><label>Roll number</label><input class="f" id="st_roll"></div>
+      <div><label>Year</label><input class="f" id="st_year" placeholder="e.g. 2nd Year"></div>
+      <div><label>Email address</label><input class="f" id="st_email" placeholder="student@example.com"></div>
+    </div>
+    <div id="stInfo" style="margin-top:10px"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn primary" style="flex:1" id="stSaveBtn" onclick="saveStEdit()">💾 Save Changes</button>
+      <button class="btn" onclick="closeStEdit();">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- certificate edit modal -->
+<div id="stModal2" style="position:fixed;inset:0;background:rgba(10,30,18,.55);display:none;z-index:70;align-items:center;justify-content:center;padding:20px;overflow:auto" onclick="if(event.target===this)closeCertEdit()">
+  <div style="background:#fff;border-radius:16px;width:min(480px,94vw);padding:22px 24px;box-shadow:0 16px 44px rgba(0,0,0,.3);margin:20px 0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <b style="color:var(--green);font-size:16px" id="stModal2_title">✎ Edit Certificate</b>
+      <button class="btn" onclick="closeCertEdit()">✕</button>
+    </div>
+    <div id="ce_body"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn primary" style="flex:1" id="ceSaveBtn" onclick="saveCertEdit()">💾 Save Certificate</button>
+      <button class="btn" onclick="closeCertEdit();">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- state & helpers ---------------- */
+const $ = (id) => document.getElementById(id);
+let EV = 1, EVENTS = [], PURL = "", CART = new Set();
+const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const CATCLS = { "Participation":"cat-p", "First Prize":"cat-f", "Second Prize":"cat-s", "Third Prize":"cat-t" };
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (r.status === 401 && !url.includes("/admin/login")) { showLogin(true); throw new Error("Session expired"); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `Error ${r.status}`);
+  return d;
+}
+function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
+function openModal(title, url) { $("mTitle").textContent = title; $("mFrame").src = url; $("modal").style.display = "flex"; }
+function closeModal() { $("modal").style.display = "none"; $("mFrame").src = "about:blank"; }
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x => x.classList.remove("show"));
+  b.classList.add("active"); $("p-" + b.dataset.p).classList.add("show");
+  if (b.dataset.p === "certs") loadCerts();
+  if (b.dataset.p === "portal") loadPortal();
+});
+
+/* ---------------- auth ---------------- */
+function showLogin(v) { $("login").style.display = v ? "flex" : "none"; $("app").style.display = v ? "none" : "block"; if (v) $("lerr").style.display = "none"; }
+async function doLogin() {
+  try {
+    const d = await api("/api/admin/login", { method: "POST", body: JSON.stringify({ username: $("lu").value, password: $("lp").value }) });
+    $("whoami").textContent = d.username; showLogin(false); boot();
+  } catch (e) { $("lerr").textContent = e.message; $("lerr").style.display = "block"; }
+}
+$("lp").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+async function doLogout() { await api("/api/admin/logout", { method: "POST" }).catch(() => {}); location.reload(); }
+async function changePw() {
+  try {
+    await api("/api/admin/change-password", { method: "POST", body: JSON.stringify({ current: $("cw_cur").value, next: $("cw_new").value }) });
+    $("pwMsg").innerHTML = `<div class="msg ok">Password changed successfully.</div>`; $("cw_cur").value = $("cw_new").value = "";
+  } catch (e) { $("pwMsg").innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
+}
+
+/* ---------------- boot ---------------- */
+async function boot() {
+  const evs = await api("/api/admin/events");
+  EVENTS = evs.events;
+  const selHtml = EVENTS.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join("");
+  $("evSelDash").innerHTML = selHtml;
+  EV = EVENTS.find(e => e.is_active)?.id || EVENTS[0]?.id || 1;
+  $("evSelDash").value = EV;
+  loadAll();
+}
+async function loadAll() { loadDashboard(); loadEventForm(); loadStudents(); loadCerts(); }
+
+/* ---------------- dashboard ---------------- */
+async function loadDashboard() {
+  const s = await api("/api/admin/stats");
+  $("stStudents").textContent = s.students; $("stCerts").textContent = s.certificates;
+  $("stPart").textContent = s.participation; $("stWin").textContent = s.winners; $("stDl").textContent = s.downloaded;
+  const ev = EVENTS.find(e => e.id === EV);
+  $("quickLines").innerHTML =
+    `Event: <b style="color:var(--green)">${esc(ev?.title || "-")}</b> · ${esc(ev?.event_date || "")} · Organised by ${esc(ev?.organiser || "")}<br>` +
+    `Published certificates: <b>${ev?.certs_published ?? 0}</b> &nbsp;•&nbsp; Registered students in this event: <b>${ev?.students_count ?? 0}</b><br>` +
+    `Portal status: <b style="color:${ev?.portal_active ? "#1d6d33" : "#9b2c2c"}">${ev?.portal_active ? "ACTIVE — students can download" : "INACTIVE — open the Portal QR tab to activate"}</b>`;
+}
+
+/* ---------------- students ---------------- */
+let STQQ = null, LAST_STUDENTS = [];
+$("stSearch").addEventListener("input", () => { clearTimeout(STQQ); STQQ = setTimeout(loadStudents, 300); });
+
+async function loadStudents() {
+  const q = $("stSearch").value.trim();
+  const d = await api(`/api/admin/events/${EV}/students${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  LAST_STUDENTS = d.students;
+  $("stBody").innerHTML = d.students.map(s => `
+    <tr>
+      <td><input value="${esc(s.name)}" onchange="saveStudent(${s.id},'name',this.value)"></td>
+      <td><input value="${esc(s.roll_number)}" onchange="saveStudent(${s.id},'roll_number',this.value)"></td>
+      <td><input value="${esc(s.year)}" placeholder="—" onchange="saveStudent(${s.id},'year',this.value)"></td>
+      <td><input value="${esc(s.email)}" placeholder="—" onchange="saveStudent(${s.id},'email',this.value)"></td>
+      <td>${s.cert_category ? `<button class="chip ${CATCLS[s.cert_category] || "cat-p"}" style="border:0;cursor:pointer" title="Click to edit this certificate" onclick="openCertForStudent(${s.id})">✎ ${esc(s.cert_category)}</button>` : `<span style="color:#bbb">— <span style="font-size:10px">no certificate</span></span>`}</td>
+      <td class="rowact">
+        <button title="Edit all details" onclick="openStEdit(${s.id})">✎</button>
+        <button title="Delete" onclick="delStudent(${s.id},'${esc(s.name).replace(/'/g,"\\'")}')">🗑</button>
+      </td>
+    </tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:22px">No students found. Add manually or import Excel/CSV.</td></tr>`;
+  $("stCount").textContent = `${d.students.length} shown · ${d.total} registered in this event`;
+}
+
+/* ---- student edit modal ---- */
+let stEditId = null;
+function openStEdit(id) {
+  const s = LAST_STUDENTS.find(x => x.id === id);
+  if (!s) return;
+  stEditId = id;
+  $("st_name").value = s.name || ""; $("st_roll").value = s.roll_number || "";
+  $("st_year").value = s.year || ""; $("st_email").value = s.email || "";
+  $("stInfo").innerHTML =
+    (s.cert_category ? `Certificate: <b>${esc(s.cert_category)}</b> (${esc(s.cert_status || "draft")})` : "No certificate assigned yet.")
+    + `<br><span style="color:var(--muted)">Changing name/roll here updates all previews and PDFs of this student automatically.</span>`;
+  $("stModal").style.display = "flex";
+  $("st_name").focus();
+}
+function closeStEdit() { $("stModal").style.display = "none"; stEditId = null; }
+async function saveStEdit() {
+  if (!stEditId) return;
+  const body = {
+    name: $("st_name").value.trim(),
+    roll_number: $("st_roll").value.trim(),
+    year: $("st_year").value.trim(),
+    email: $("st_email").value.trim()
+  };
+  if (!body.name || !body.roll_number) { alert("Student name and roll number are required."); return; }
+  const btn = $("stSaveBtn"); btn.disabled = true;
+  try {
+    await api(`/api/admin/students/${stEditId}`, { method: "PUT", body: JSON.stringify(body) });
+    toast("Student details saved ✔");
+    closeStEdit(); loadStudents(); loadCerts(); loadDashboard();
+  } catch (e) { alert(e.message); }
+  btn.disabled = false;
+}
+
+/* ---- certificate edit modal ---- */
+let CERTS_CACHE = [];
+async function openCertForStudent(studentId) {
+  /* click on a certificate chip in the Students tab */
+  if (!CERTS_CACHE.length) {
+    const d = await api(`/api/admin/events/${EV}/certificates`);
+    CERTS_CACHE = d.certificates;
+  }
+  const c = CERTS_CACHE.find(x => x.student_id === studentId);
+  if (c) openCertEdit(c.id);
+}
+function openCertEdit(certId) {
+  const c = CERTS_CACHE.find(x => x.id === certId);
+  if (!c) return;
+  const opts = ["Participation", "First Prize", "Second Prize", "Third Prize"]
+    .map(x => `<option ${x === c.category ? "selected" : ""}>${x}</option>`).join("");
+  $("ce_body").innerHTML = `
+    <div class="grid" style="grid-template-columns:1fr">
+      <div style="text-align:center;padding:6px 0 2px">
+        <span style="font-size:11px;color:var(--muted);letter-spacing:1px">CERTIFICATE ID</span>
+        <div style="font-size:20px;font-weight:800;color:var(--green2)">${esc(c.cert_uid)}</div>
+        <span class="chip ${c.status}" style="margin-top:6px">${c.status}</span>
+      </div>
+      <div><label>Certificate category</label>
+        <select class="f" id="ce_cat">${opts}</select>
+        <div class="hint">Participation = Certificate of Participation · prize options = Certificate of Excellence</div></div>
+      <div><label>Recipient name (as printed on certificate)</label><input class="f" id="ce_name" value="${esc(c.name)}"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label>Roll number</label><input class="f" id="ce_roll" value="${esc(c.roll_number || "")}"></div>
+        <div><label>Year</label><input class="f" id="ce_year" value="${esc(c.year || "")}" placeholder="e.g. 2nd Year"></div>
+      </div>
+      <div style="background:#fbf5ec;border:1px solid #e8dcc4;border-radius:9px;padding:9px 12px;font-size:12px;color:#7c6836">
+        ⚠ Editing a <b>published</b> certificate takes effect immediately in the student portal. Name/roll edits also update the student record.</div>
+    </div>`;
+  $("stModal2").style.display = "flex";
+  $("stModal2").dataset.cert = certId;
+  $("stModal2_title").innerHTML = `✎ Edit Certificate <span style="color:var(--muted);font-weight:400;font-size:12px">· ${esc(c.name)}</span>`;
+}
+function closeCertEdit() { $("stModal2").style.display = "none"; }
+async function saveCertEdit() {
+  const certId = +$("stModal2").dataset.cert;
+  const c = CERTS_CACHE.find(x => x.id === certId);
+  if (!c) return;
+  const category = $("ce_cat").value;
+  const name = $("ce_name").value.trim(), roll = $("ce_roll").value.trim(), year = $("ce_year").value.trim();
+  if (!name || !roll) { alert("Recipient name and roll number are required."); return; }
+  const btn = $("ceSaveBtn"); btn.disabled = true;
+  try {
+    await api(`/api/admin/certificates/${certId}`, { method: "PUT", body: JSON.stringify({ category }) });
+    if (name !== c.name || roll !== c.roll_number || year !== (c.year || "")) {
+      await api(`/api/admin/students/${c.student_id}`, { method: "PUT", body: JSON.stringify({ name, roll_number: roll, year }) });
+    }
+    toast("Certificate updated ✔");
+    closeCertEdit(); loadCerts(); loadStudents(); loadDashboard();
+  } catch (e) { alert(e.message); }
+  btn.disabled = false;
+}
+function openAdd() {
+  const n = prompt("Student name:"); if (!n) return;
+  const r = prompt("Roll number:"); if (!r) return;
+  api(`/api/admin/events/${EV}/students`, { method: "POST", body: JSON.stringify({ name: n, roll_number: r }) })
+    .then(t => toast("Student added")).catch(e => alert(e.message)).finally(loadStudents);
+}
+async function saveStudent(id, k, v) {
+  try { await api(`/api/admin/students/${id}`, { method: "PUT", body: JSON.stringify({ [k]: v }) }); toast("Saved"); }
+  catch (e) { alert(e.message); loadStudents(); }
+}
+async function delStudent(id, name) {
+  if (!confirm(`Delete student "${name}"? Their certificate (if any) is also deleted.`)) return;
+  await api(`/api/admin/students/${id}`, { method: "DELETE" }).catch(e => alert(e.message));
+  loadStudents(); loadDashboard();
+}
+async function doImport(input) {
+  if (!input.files.length) return;
+  const f = new FormData(); f.append("file", input.files[0]);
+  const r = await fetch(`/api/admin/events/${EV}/students/import`, { method: "POST", body: f });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) alert(d.error || "Import failed"); else toast(`Imported ${d.added} students${d.skipped ? `, skipped ${d.skipped}` : ""}`);
+  input.value = ""; loadStudents(); loadDashboard(); loadCerts();
+}
+function exportCSV() {
+  api(`/api/admin/events/${EV}/students`).then(d => {
+    const rows = [["Name","Roll Number","Year","Email","Certificate Category","Status"]];
+    d.students.forEach(s => rows.push([s.name, s.roll_number, s.year, s.email, s.cert_category || "", s.cert_status || ""]));
+    const csv = rows.map(r => r.map(c => `"${String(c || "").replace(/"/g,'""')}"`).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "students.csv"; a.click();
+  });
+}
+
+/* ---------------- event form ---------------- */
+async function loadEventForm() {
+  const d = await api("/api/admin/events");
+  const e = d.events.find(x => x.id === EV);
+  if (!e) return;
+  ["title","event_date","organiser","institute","cert_prefix","motto","issued_line","sig1_role","sig2_role","heading","intro"]
+    .forEach(k => { if ($("e_" + k)) $("e_" + k).value = e[k] || ""; });
+  [["logo","pl_logo"],["sig1","pl_sig1"],["sig2","pl_sig2"]].forEach(([k, id]) => {
+    const img = $(id);
+    if (e[k + "_path"]) { img.src = `/data-uploads/${e[k + "_path"]}`; img.style.display = "block"; }
+    else img.style.display = "none";
+  });
+}
+async function saveEvent() {
+  const b = {};
+  ["title","event_date","organiser","institute","cert_prefix","motto","issued_line","sig1_role","sig2_role","heading","intro"].forEach(k => b[k] = $("e_" + k).value);
+  await api(`/api/admin/events/${EV}`, { method: "PUT", body: JSON.stringify(b) });
+  toast("Event saved"); loadPortal(); loadDashboard();
+}
+async function upAsset(key, input) {
+  if (!input.files.length) return;
+  const f = new FormData(); f.append("key", key); f.append("file", input.files[0]);
+  const r = await fetch(`/api/admin/events/${EV}/assets`, { method: "POST", body: f });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) alert(d.error || "Upload failed"); else toast("Uploaded");
+  input.value = ""; loadEventForm();
+}
+async function delAsset(key) {
+  await api(`/api/admin/events/${EV}/assets/${key}`, { method: "DELETE" }).catch(e => alert(e.message));
+  loadEventForm();
+}
+function openPreview(certId) {
+  api(`/api/admin/events/${EV}/certificates`).then(d => {
+    const url = certId === -1
+      ? (d.certificates[0] ? `/api/admin/certificates/${d.certificates[0].id}/preview` : `/api/admin/events/${EV}/preview-all`)
+      : `/api/admin/certificates/${certId}/preview`;
+    openModal("Certificate Preview", url);
+  });
+}
+
+/* ---------------- certificates ---------------- */
+function checkAll(cb) { document.querySelectorAll("#cBody input[type=checkbox]").forEach(x => x.checked = cb.checked); CART = new Set(); }
+async function loadCerts() {
+  const [cs, st] = await Promise.all([
+    api(`/api/admin/events/${EV}/certificates`),
+    api(`/api/admin/events/${EV}/students`)
+  ]);
+  CERTS_CACHE = cs.certificates;
+  const certByStudent = new Map(cs.certificates.map(c => [c.student_id, c]));
+  $("cBody").innerHTML = st.students.map(s => {
+    const c = certByStudent.get(s.id);
+    if (!c) return `
+      <tr><td><input type="checkbox" value="${s.id}" class="bulkStu"></td>
+      <td>${esc(s.name)}</td><td>${esc(s.roll_number)}</td>
+      <td colspan="3" style="text-align:left;color:#bbb">no certificate yet</td><td></td></tr>`;
+    return `
+      <tr>
+        <td><input type="checkbox" value="${s.id}" class="bulkStu" ${c.status === 'published' ? "checked" : ""}></td>
+        <td>${esc(s.name)}</td><td>${esc(s.roll_number)}</td><td><b style="color:var(--green2)">${esc(c.cert_uid)}</b></td>
+        <td><span class="chip ${CATCLS[c.category] || "cat-p"}">${esc(c.category)}</span></td>
+        <td><span class="chip ${c.status}">${c.status}</span></td>
+        <td class="rowact">
+          <button title="Edit certificate (category / name / roll / year)" onclick="openCertEdit(${c.id})">✎</button>
+          <button title="Preview" onclick="openModal('${esc(c.cert_uid)}', '/api/admin/certificates/${c.id}/preview')">👁</button>
+          <button title="Download PDF" onclick="location.href='/api/admin/certificates/${c.id}/pdf'">⬇</button>
+          ${c.status !== "published" ? `<button title="Delete" onclick="delCert(${c.id})">🗑</button>` : ""}
+        </td>
+      </tr>`;
+  }).join("") || `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">No students yet in this event.</td></tr>`;
+}
+async function bulkAssign() {
+  const ids = [...document.querySelectorAll("#cBody .bulkStu")].filter(x => x.checked).map(x => +x.value);
+  if (!ids.length) { toast("Tick at least one student"); return; }
+  await api(`/api/admin/events/${EV}/certificates`, { method: "POST", body: JSON.stringify({ student_ids: ids, category: $("bulkCat").value }) });
+  toast("Category assigned — draft certificates created"); loadCerts(); loadDashboard(); loadStudents();
+}
+async function setCat(id, v) {
+  await api(`/api/admin/certificates/${id}`, { method: "PUT", body: JSON.stringify({ category: v }) });
+  toast("Category updated"); loadCerts();
+}
+async function delCert(id) {
+  if (!confirm("Delete this draft certificate?")) return;
+  await api(`/api/admin/certificates/${id}`, { method: "DELETE" }).catch(e => alert(e.message));
+  loadCerts(); loadDashboard();
+}
+async function approveSel() {
+  const ids = [...document.querySelectorAll("#cBody .bulkStu")].filter(x => x.checked).map(x => +x.value);
+  if (!ids.length) { toast("Tick at least one certificate"); return; }
+  try {
+    await api(`/api/admin/certificates/status`, { method: "POST", body: JSON.stringify({ ids, status: "approved" }) });
+    toast("Approved ✔"); loadCerts(); loadDashboard();
+  } catch (e) { alert(e.message); }
+}
+async function publishSel() {
+  const ids = [...document.querySelectorAll("#cBody .bulkStu")].filter(x => x.checked).map(x => +x.value);
+  if (!ids.length) { toast("Tick at least one certificate"); return; }
+  try {
+    await api(`/api/admin/certificates/status`, { method: "POST", body: JSON.stringify({ ids, status: "published" }) });
+    toast("Published 🚀 students can now download"); loadCerts(); loadDashboard();
+  } catch (e) { alert(e.message); loadCerts(); }
+}
+
+/* ---------------- portal QR ---------------- */
+async function loadPortal() {
+  const e = EVENTS.find(x => x.id === EV) || (EVENTS = (await api("/api/admin/events")).events).find(x => x.id === EV);
+  if (!e?.portal_token) { toast("Generating portal link…"); return; }
+  PURL = `${location.origin}/portal/${e.portal_token}`;
+  $("portalUrl").value = PURL;
+  $("qrImg").src = `/api/admin/events/${EV}/portal-qr`;
+  $("qrImg").style.opacity = 1;
+  $("qrDl").href = `/api/admin/events/${EV}/portal-qr`;
+  const btn = $("portalToggle");
+  const active = !!e.portal_active;
+  btn.textContent = active ? "🟢 Portal ACTIVE — click to DEACTIVATE" : "🔴 Portal INACTIVE — click to ACTIVATE";
+  btn.className = "btn " + (active ? "danger" : "primary");
+}
+async function togglePortal() {
+  const e = EVENTS.find(x => x.id === EV);
+  await api(`/api/admin/events/${EV}`, { method: "PUT", body: JSON.stringify({ portal_active: !e.portal_active }) });
+  EVENTS.find(x => x.id === EV).portal_active = !e.portal_active;
+  toast(e.portal_active ? "Portal deactivated" : "Portal activated 🚀");
+  loadPortal(); loadDashboard();
+}
+async function regenToken() {
+  if (!confirm("Regenerate the portal link? The old QR code will stop working — print the new one.")) return;
+  await api(`/api/admin/events/${EV}/regenerate-portal-token`, { method: "POST" });
+  const d = await api("/api/admin/events");
+  EVENTS = d.events; toast("New portal link generated"); loadPortal();
+}
+function printQR() {
+  const w = window.open("", "QR", "width=560,height=760");
+  const e = EVENTS.find(x => x.id === EV);
+  w.document.write(`<!DOCTYPE html><html><head><title>Portal QR</title>
+  <style>body{font-family:Georgia,serif;text-align:center;padding:44px 30px}h2{color:#1f5c36;margin:8px 0}p{color:#666;font-size:13px;line-height:1.6}img{width:300px;height:300px}</style></head>
+  <body><div style="font-size:40px">🌿</div><h2>${esc(e.title)}</h2><p>${esc(e.institute)}<br>Scan to download your e-certificate · ${esc(e.event_date)}<br>⬇</p><img src="/api/admin/events/${EV}/portal-qr"><p style="margin-top:10px;font-size:11px">${esc(PURL)}</p></body></html>`);
+  w.document.close(); setTimeout(() => w.print(), 500);
+}
+
+/* start */
+api("/api/admin/me").then(d => { $("whoami").textContent = d.username; showLogin(false); boot(); }).catch(() => showLogin(true));
+</script>
+</body>
+</html>

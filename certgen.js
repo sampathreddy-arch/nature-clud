@@ -73,9 +73,11 @@ function esc(s) { return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&
 
 /**
  * data = { certUid, category, student:{name,roll_number,department,year},
- *          event:{institute?,title,event_date,organiser,motto,issued_line},   // institute text passes through event
+ *          event:{institute?,title,event_date,organiser,motto,issued_line},
  *          logo: dataURL|null, sig1: dataURL|null, sig2: dataURL|null,
- *          qr: dataURL (verification QR), verifyUrl }
+ *          qr: dataURL (verification QR), verifyUrl,
+ *          templateUrl: string|null  — URL path to background image (admin-uploaded theme)
+ * }
  */
 function renderCertHTML(d) {
   const a = ACFG[d.category] || ACFG.Participation;
@@ -93,8 +95,8 @@ function renderCertHTML(d) {
     return `<div class="sign">${img ? `<img src="${img}" alt="">` : `<div style="height:52px"></div>`}<div class="line"></div><div class="role">${esc(primary)}</div>${secondary}</div>`;
   };
 
-  return `<div class="cert" data-cert="${esc(d.certUid)}">
-  <div class="watermark">🌿</div>
+  return `<div class="cert" data-cert="${esc(d.certUid)}"${d.templateUrl ? ` style="background-image:url('${d.templateUrl}');background-size:cover;background-position:center;"` : ""}>
+  <div class="watermark">${d.templateUrl ? "" : "🌿"}</div>
   <div class="corn tl">🌿</div><div class="corn tr">🌳</div><div class="corn bl">🌱</div><div class="corn br">🍁</div>
   <div class="inner">
     ${d.logo ? `<img class="logo" src="${d.logo}" alt="logo">` : ""}
@@ -138,7 +140,16 @@ function generatePDF(d) {
     const cx = W / 2;
     const scriptFont = findFont();
 
-    /* frame */
+    /* ---- background template image (admin-uploaded theme) ---- */
+    if (d.templateBuf) {
+      try {
+        doc.image(d.templateBuf, 0, 0, { width: W, height: H });
+      } catch (e) {
+        console.warn("[certgen] Could not render template background:", e.message);
+      }
+    }
+
+    /* frame (draw on top of template or alone) */
     doc.lineWidth(6).rect(10, 10, W - 20, H - 20).stroke(hex(GREEN));
     doc.lineWidth(1.4).rect(20, 20, W - 40, H - 40).stroke(hex(GOLD));
 

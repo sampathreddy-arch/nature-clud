@@ -113,6 +113,8 @@ function safeAlter(sql) { try { db.exec(sql); } catch (e) { if (!String(e.messag
   safeAlter("ALTER TABLE students ADD COLUMN phone TEXT DEFAULT ''");
   safeAlter("ALTER TABLE students ADD COLUMN date TEXT DEFAULT ''");
   safeAlter("ALTER TABLE certificates ADD COLUMN issue_date TEXT DEFAULT ''");
+  /* certificate theme/template background */
+  safeAlter("ALTER TABLE events ADD COLUMN template_path TEXT DEFAULT NULL");
   const bcrypt = require("bcryptjs");
   if (!row("SELECT id FROM admins LIMIT 1")) {
     run("INSERT INTO admins (username, password_hash) VALUES (?, ?)",

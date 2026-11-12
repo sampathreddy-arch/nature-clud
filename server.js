@@ -184,34 +184,6 @@ const upload = multer({
 });
 const ASSET_KEYS = { logo: "logo_path", sig1: "sig1_path", sig2: "sig2_path" };
 
-/* ---- upload cert theme (background image PNG/JPG) ---- */
-const templateUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, /^image\/(png|jpe?g)$/i.test(file.mimetype))
-});
-
-app.post("/api/admin/events/:id/template", requireAdmin, templateUpload.single("template"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No image uploaded (PNG or JPG only)" });
-  const e = row("SELECT * FROM events WHERE id = ?", req.params.id);
-  if (!e) return res.status(404).json({ error: "Event not found" });
-  // delete old template file if present
-  if (e.template_path) { try { fs.unlinkSync(path.join(UPLOAD_DIR, e.template_path)); } catch {} }
-  const ext = (path.extname(req.file.originalname) || ".png").toLowerCase().replace(/[^.a-z0-9]/g, "");
-  const fname = `event${e.id}_template_${Date.now()}${ext}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, fname), req.file.buffer);
-  run("UPDATE events SET template_path = ? WHERE id = ?", fname, e.id);
-  res.json({ ok: true, path: fname });
-});
-
-app.delete("/api/admin/events/:id/template", requireAdmin, (req, res) => {
-  const e = row("SELECT id, template_path FROM events WHERE id = ?", req.params.id);
-  if (!e) return res.status(404).json({ error: "Event not found" });
-  if (e.template_path) { try { fs.unlinkSync(path.join(UPLOAD_DIR, e.template_path)); } catch {} }
-  run("UPDATE events SET template_path = NULL WHERE id = ?", e.id);
-  res.json({ ok: true });
-});
-
 app.post("/api/admin/events/:id/assets", requireAdmin, upload.single("file"), (req, res) => {
   const key = req.body.key;
   if (!ASSET_KEYS[key]) return res.status(400).json({ error: "key must be logo | sig1 | sig2" });
@@ -471,9 +443,6 @@ function fileToDataURL(f) {
 async function buildCertData(cert, student) {
   const event = row("SELECT * FROM events WHERE id = ?", cert.event_id);
   const verifyUrl = `${BASE}/verify/${cert.token}`;
-  const templateUrl = event.template_path
-    ? `/data-uploads/${event.template_path}`
-    : null;
   return {
     certUid: cert.cert_uid,
     category: cert.category,
@@ -482,7 +451,6 @@ async function buildCertData(cert, student) {
     logo: fileToDataURL(event.logo_path),
     sig1: fileToDataURL(event.sig1_path),
     sig2: fileToDataURL(event.sig2_path),
-    templateUrl,
     qr: await QRCode.toDataURL(verifyUrl, { margin: 1, width: 220, color: { dark: "#134d2c" } })
   };
 }
@@ -517,7 +485,6 @@ async function certPDF(cert, student) {
   d.logoBuf = eventFile(cert.event_id, "logo_path");
   d.sig1Buf = eventFile(cert.event_id, "sig1_path");
   d.sig2Buf = eventFile(cert.event_id, "sig2_path");
-  d.templateBuf = eventFile(cert.event_id, "template_path");
   return generatePDF(d);
 }
 function eventFile(eventId, col) {

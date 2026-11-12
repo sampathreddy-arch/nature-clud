@@ -219,24 +219,6 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
       </div>
       <div class="hint">Admins can upload an image (PNG/JPG), draw on the signature pad with a mouse/touchscreen, or type the name to generate a cursive signature. Role text appears under the signature line.</div>
     </div>
-
-    <!-- Certificate Theme Upload -->
-    <div class="card" style="border:2px dashed var(--gold)">
-      <h3>🎨 Certificate Theme / Background Template</h3>
-      <p style="font-size:13px;color:#555;margin-bottom:12px">Upload a custom certificate background image (PNG or JPG, A4 landscape, up to 8 MB). When set, it replaces the default white background — your design appears behind the student name, text, and signatures.</p>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <label class="btn primary" style="display:inline-block;cursor:pointer">
-          🖼 Upload Theme Image
-          <input type="file" accept="image/png,image/jpeg,image/jpg" style="display:none" onchange="uploadTemplate(this)">
-        </label>
-        <button class="btn danger" onclick="deleteTemplate()">✕ Remove Theme</button>
-        <span id="templateStatus" style="font-size:13px;color:#555"></span>
-      </div>
-      <div id="templatePreviewWrap" style="margin-top:12px;display:none">
-        <p style="font-size:12px;color:#888;margin-bottom:6px">Current theme preview:</p>
-        <img id="templatePreviewImg" style="max-width:420px;max-height:200px;border-radius:8px;border:2px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,0.12)" onerror="this.parentElement.style.display='none'">
-      </div>
-    </div>
   </section>
 
   <!-- CERTIFICATES -->
@@ -684,14 +666,6 @@ async function loadEventForm() {
     if (e[k + "_path"]) { img.src = `/data-uploads/${e[k + "_path"]}`; img.style.display = "block"; }
     else img.style.display = "none";
   });
-  /* show certificate theme preview */
-  if (e.template_path) {
-    showTemplatePreview(`/data-uploads/${e.template_path}`);
-    $("templateStatus").textContent = "✅ Custom theme is active";
-  } else {
-    $("templatePreviewWrap").style.display = "none";
-    $("templateStatus").textContent = "No custom theme – using default green design";
-  }
 }
 async function saveEvent() {
   const b = {};
@@ -710,47 +684,6 @@ async function upAsset(key, input) {
 async function delAsset(key) {
   await api(`/api/admin/events/${EV}/assets/${key}`, { method: "DELETE" }).catch(e => alert(e.message));
   loadEventForm();
-}
-
-/* ---- Certificate Theme Upload ---- */
-async function uploadTemplate(input) {
-  if (!input.files.length) return;
-  const file = input.files[0];
-  if (file.size > 8 * 1024 * 1024) { alert("File too large. Maximum size is 8 MB."); input.value = ""; return; }
-  $("templateStatus").textContent = "Uploading…";
-  const f = new FormData();
-  f.append("template", file);
-  const r = await fetch(`/api/admin/events/${EV}/template`, { method: "POST", body: f });
-  const d = await r.json().catch(() => ({}));
-  input.value = "";
-  if (!r.ok) {
-    $("templateStatus").textContent = "❌ " + (d.error || "Upload failed");
-    return;
-  }
-  $("templateStatus").textContent = "✅ Theme saved!";
-  showTemplatePreview(`/data-uploads/${d.path}`);
-  toast("Certificate theme uploaded");
-}
-
-async function deleteTemplate() {
-  if (!confirm("Remove the custom certificate theme? The default design will be used.")) return;
-  const r = await fetch(`/api/admin/events/${EV}/template`, { method: "DELETE" });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) { alert(d.error || "Failed to remove theme"); return; }
-  $("templateStatus").textContent = "Theme removed – using default design";
-  $("templatePreviewWrap").style.display = "none";
-  toast("Certificate theme removed");
-}
-
-function showTemplatePreview(url) {
-  const wrap = $("templatePreviewWrap");
-  const img = $("templatePreviewImg");
-  if (url) {
-    img.src = url + "?t=" + Date.now();
-    wrap.style.display = "block";
-  } else {
-    wrap.style.display = "none";
-  }
 }
 
 /* ---- Signature Drawing & Typing Pad ---- */

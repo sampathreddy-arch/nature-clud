@@ -77,9 +77,7 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
 #modal .mhead{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);background:#f7faf7}
 #modal .mhead b{color:var(--green);font-size:14.5px}
 #modal iframe{flex:1;border:0;background:#3a4d3a}
-/* qr */
-.qrwrap{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
-.qrwrap img{border:1px solid var(--line);border-radius:12px;width:230px;height:230px;background:#fff}
+/* toast */
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:11px 22px;border-radius:30px;font-size:13.5px;opacity:0;transition:.3s;z-index:99;pointer-events:none}
 .toast.show{opacity:1}
 .msg{padding:10px 14px;border-radius:10px;font-size:12.5px;margin-top:10px}
@@ -95,7 +93,7 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
   <div class="loginbox">
     <div class="l">🛡️</div>
     <h1>Admin Login</h1>
-    <p>Nature Club – E-Certificate Portal<br>Aurora Higher Education and Research Academy, Bhongir Campus</p>
+    <p>Nature Club – E-Certificate Portal<br>Aurora Deemed-to-be-University</p>
     <input id="lu" placeholder="Username" autocomplete="username">
     <input id="lp" type="password" placeholder="Password" autocomplete="current-password">
     <button onclick="doLogin()">Sign In</button>
@@ -111,14 +109,14 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
       <img src="/aurora_full_logo.png" alt="Aurora Logo" style="height:26px;object-fit:contain;display:block">
     </div>
     <h2>E-Certificate Portal</h2>
-    <p>Nature Club · Bhongir Campus</p>
+    <p>Nature Club · ECO GAMES</p>
   </div>
   <nav>
     <button data-p="dashboard" class="active">📊 Dashboard</button>
     <button data-p="students">👥 Students</button>
     <button data-p="event">🏛️ Event &amp; Design</button>
     <button data-p="certs">🎓 Certificates</button>
-    <button data-p="portal">🔗 Portal QR</button>
+    <button data-p="portal">🔗 Student Portal</button>
     <button data-p="account">🔑 Account</button>
   </nav>
   <div class="sidefoot">Signed in as <b id="whoami">admin</b><br><a onclick="doLogout()">Logout →</a></div>
@@ -135,19 +133,11 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
       <div class="stat"><div class="n" id="stCerts">0</div><div class="t">Certificates Generated</div></div>
       <div class="stat"><div class="n" id="stPart">0</div><div class="t">Participation Certificates</div></div>
       <div class="stat"><div class="n" id="stWin">0</div><div class="t">Winner Certificates</div></div>
+      <div class="stat"><div class="n" id="stRun">0</div><div class="t">Runner-up Certificates</div></div>
       <div class="stat"><div class="n" id="stDl">0</div><div class="t">Certificates Downloaded</div></div>
     </div>
     <div class="card"><h3>Quick status</h3>
       <div id="quickLines" style="font-size:13px;color:var(--muted);line-height:1.8"></div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-        <div>
-          <h3 style="display:flex;align-items:center;gap:8px">🍃 MongoDB Atlas Cloud Database <span id="mongoBadge" class="chip cat-p" style="font-size:11px">Checking…</span></h3>
-          <p id="mongoDetail" style="font-size:12px;color:var(--muted);margin-top:3px">Cluster: cluster0.8zo4dqi.mongodb.net · Database: ecocert</p>
-        </div>
-        <button class="btn" type="button" onclick="syncMongo()">🔄 Sync to Atlas</button>
-      </div>
     </div>
   </section>
 
@@ -234,11 +224,13 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
     </div>
     <div class="card"><h3>1 · Assign a category to students</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select class="f" id="bulkCat" style="width:200px">
-          <option>Participation</option><option>First Prize</option><option>Second Prize</option><option>Third Prize</option>
+        <select class="f" id="bulkCat" style="width:210px">
+          <option value="Winner">🏆 Winner — Certificate of Achievement</option>
+          <option value="Runner-up">🥈 Runner-up — Certificate of Achievement</option>
+          <option value="Participation">🎖 Participation — Certificate of Participation</option>
         </select>
         <button class="btn primary" onclick="bulkAssign()">＋ Assign to selected students →</button>
-        <span class="hint" style="margin:0">or change a student's certificate below</span>
+        <span class="hint" style="margin:0">The matching official Eco Games template is chosen automatically.</span>
       </div>
       <div class="card" style="margin:12px 0 0;background:#fbfdfb;padding:12px 14px">
         <table><thead><tr><th style="width:36px"><input type="checkbox" id="cbAll" onchange="checkAll(this)"></th><th>Name</th><th>Roll No.</th><th>Certificate ID</th><th>Category</th><th>Status</th><th></th></tr></thead>
@@ -248,30 +240,26 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
     </div>
   </section>
 
-  <!-- PORTAL QR -->
+  <!-- STUDENT PORTAL (direct link and certificate download QR) -->
   <section class="panel" id="p-portal">
-    <div class="topbar"><h1>Student Portal &amp; Shared QR Code</h1></div>
+    <div class="topbar"><h1>Student Portal — Direct Link</h1></div>
     <div class="card">
-      <div class="qrwrap">
-        <img id="qrImg" alt="Portal QR" onerror="this.style.opacity=.25">
-        <div style="flex:1;min-width:260px">
-          <label>Portal link (inside the QR)</label>
-          <div style="display:flex;gap:8px;margin:4px 0 14px;flex-wrap:wrap">
-            <input class="f" id="portalUrl" readonly style="flex:1;min-width:240px">
-            <button class="btn" onclick="navigator.clipboard.writeText(PURL);toast('Link copied')">Copy</button>
-            <a class="btn" id="qrDl" download="portal-qr.png">⬇ Download PNG</a>
-            <button class="btn" onclick="printQR()">🖨 Print</button>
-          </div>
-          <label>Portal status</label>
-          <div style="display:flex;gap:10px;align-items:center;margin:4px 0 14px">
-            <button class="btn" id="portalToggle" onclick="togglePortal()"></button>
-            <button class="btn danger" onclick="regenToken()">♻ Regenerate link</button>
-          </div>
-          <div class="msg ok" style="margin-top:0">One shared QR for <b>all students</b> — it opens the portal.<br>
-          Students scan → search their name → confirm → download. Each certificate still carries its own <b>verification QR</b>.</div>
-          <div class="hint">Put this QR on the event banner / display screens at the venue. Only <b>Published</b> certificates appear in the portal.</div>
-        </div>
+      <label>Portal link (share this with students)</label>
+      <div style="display:flex;gap:8px;margin:4px 0 14px;flex-wrap:wrap">
+        <input class="f" id="portalUrl" readonly style="flex:1;min-width:240px">
+        <button class="btn" onclick="navigator.clipboard.writeText(PURL);toast('Link copied')">Copy link</button>
+        <button class="btn" onclick="window.open(PURL)">Open portal</button>
       </div>
+      <label>Portal status</label>
+      <div style="display:flex;gap:10px;align-items:center;margin:4px 0 14px">
+        <button class="btn" id="portalToggle" onclick="togglePortal()"></button>
+        <button class="btn danger" onclick="regenToken()">♻ Regenerate link</button>
+      </div>
+      <div class="msg ok" style="margin-top:0">
+        Share this <b>direct link</b> with students (print it on the event banner, share in the class group, or display it on screens at the venue).
+        Students open the link → search their <b>name or roll number</b> → confirm → download their personalized certificate.
+      </div>
+      <div class="hint">Only <b>Published</b> certificates appear in the portal. Each student automatically receives the official Winner / Runner-up / Participation design matching their category.</div>
     </div>
   </section>
 
@@ -398,7 +386,7 @@ input.f:focus,select.f:focus{border-color:var(--green2);outline:none;background:
 const $ = (id) => document.getElementById(id);
 let EV = 1, EVENTS = [], PURL = "", CART = new Set();
 const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-const CATCLS = { "Participation":"cat-p", "First Prize":"cat-f", "Second Prize":"cat-s", "Third Prize":"cat-t" };
+const CATCLS = { "Winner":"cat-f", "Runner-up":"cat-s", "Participation":"cat-p" };
 
 async function api(url, opts = {}) {
   const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -452,29 +440,13 @@ async function loadAll() { loadDashboard(); loadEventForm(); loadStudents(); loa
 async function loadDashboard() {
   const s = await api("/api/admin/stats");
   $("stStudents").textContent = s.students; $("stCerts").textContent = s.certificates;
-  $("stPart").textContent = s.participation; $("stWin").textContent = s.winners; $("stDl").textContent = s.downloaded;
+  $("stPart").textContent = s.participation; $("stWin").textContent = s.winner; $("stRun").textContent = s.runnerup; $("stDl").textContent = s.downloaded;
   const ev = EVENTS.find(e => e.id === EV);
   $("quickLines").innerHTML =
     `Event: <b style="color:var(--green)">${esc(ev?.title || "-")}</b> · ${esc(ev?.event_date || "")} · Organised by ${esc(ev?.organiser || "")}<br>` +
     `Published certificates: <b>${ev?.certs_published ?? 0}</b> &nbsp;•&nbsp; Registered students in this event: <b>${ev?.students_count ?? 0}</b><br>` +
-    `Portal status: <b style="color:${ev?.portal_active ? "#1d6d33" : "#9b2c2c"}">${ev?.portal_active ? "ACTIVE — students can download" : "INACTIVE — open the Portal QR tab to activate"}</b>`;
+    `Portal status: <b style="color:${ev?.portal_active ? "#1d6d33" : "#9b2c2c"}">${ev?.portal_active ? "ACTIVE — students can download" : "INACTIVE — open the Student Portal tab to activate"}</b>`;
 
-  api("/api/admin/mongo/status").then(m => {
-    if ($("mongoBadge")) {
-      $("mongoBadge").textContent = m.connected ? `🟢 Connected (${m.studentsCount} students in cloud)` : "⚪ Offline";
-      $("mongoBadge").className = m.connected ? "chip cat-f" : "chip cat-p";
-    }
-  }).catch(() => {});
-}
-
-async function syncMongo() {
-  toast("Syncing with MongoDB Atlas…");
-  try {
-    const res = await api("/api/admin/mongo/sync", { method: "POST" });
-    if (res.ok) toast(`Synced ${res.studentsSynced} students to Atlas ✔`);
-    else alert("Sync error: " + (res.error || "Failed"));
-    loadDashboard();
-  } catch (e) { alert(e.message); }
 }
 
 /* ---------------- students ---------------- */
@@ -577,7 +549,7 @@ async function openCertForStudent(studentId) {
 function openCertEdit(certId) {
   const c = CERTS_CACHE.find(x => x.id === certId);
   if (!c) return;
-  const opts = ["Participation", "First Prize", "Second Prize", "Third Prize"]
+  const opts = ["Winner", "Runner-up", "Participation"]
     .map(x => `<option ${x === c.category ? "selected" : ""}>${x}</option>`).join("");
   $("ce_body").innerHTML = `
     <div class="grid" style="grid-template-columns:1fr">
@@ -586,16 +558,17 @@ function openCertEdit(certId) {
         <div style="font-size:20px;font-weight:800;color:var(--green2)">${esc(c.cert_uid)}</div>
         <span class="chip ${c.status}" style="margin-top:6px">${c.status}</span>
       </div>
-      <div><label>Certificate category</label>
+      <div><label>Certificate category (chooses the official template)</label>
         <select class="f" id="ce_cat">${opts}</select>
-        <div class="hint">Participation = Certificate of Participation · prize options = Certificate of Excellence</div></div>
+        <div class="hint">Winner / Runner-up = Certificate of Achievement · Participation = Certificate of Participation. The matching official Eco Games design is selected automatically.</div></div>
       <div><label>Recipient name (as printed on certificate)</label><input class="f" id="ce_name" value="${esc(c.name)}"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div><label>Roll number</label><input class="f" id="ce_roll" value="${esc(c.roll_number || "")}"></div>
         <div><label>Year</label><input class="f" id="ce_year" value="${esc(c.year || "")}" placeholder="e.g. 2nd Year"></div>
       </div>
+      <div><label>Department</label><input class="f" id="ce_department" value="${esc(c.department || "")}"></div>
       <div style="background:#fbf5ec;border:1px solid #e8dcc4;border-radius:9px;padding:9px 12px;font-size:12px;color:#7c6836">
-        ⚠ Editing a <b>published</b> certificate takes effect immediately in the student portal. Name/roll edits also update the student record.</div>
+        ⚠ Editing a <b>published</b> certificate takes effect immediately in the student portal and generated certificate.</div>
     </div>`;
   $("stModal2").style.display = "flex";
   $("stModal2").dataset.cert = certId;
@@ -607,13 +580,13 @@ async function saveCertEdit() {
   const c = CERTS_CACHE.find(x => x.id === certId);
   if (!c) return;
   const category = $("ce_cat").value;
-  const name = $("ce_name").value.trim(), roll = $("ce_roll").value.trim(), year = $("ce_year").value.trim();
+  const name = $("ce_name").value.trim(), roll = $("ce_roll").value.trim(), year = $("ce_year").value.trim(), department = $("ce_department").value.trim();
   if (!name || !roll) { alert("Recipient name and roll number are required."); return; }
   const btn = $("ceSaveBtn"); btn.disabled = true;
   try {
     await api(`/api/admin/certificates/${certId}`, { method: "PUT", body: JSON.stringify({ category }) });
-    if (name !== c.name || roll !== c.roll_number || year !== (c.year || "")) {
-      await api(`/api/admin/students/${c.student_id}`, { method: "PUT", body: JSON.stringify({ name, roll_number: roll, year }) });
+    if (name !== c.name || roll !== c.roll_number || year !== (c.year || "") || department !== (c.department || "")) {
+      await api(`/api/admin/students/${c.student_id}`, { method: "PUT", body: JSON.stringify({ name, roll_number: roll, year, department }) });
     }
     toast("Certificate updated ✔");
     closeCertEdit(); loadCerts(); loadStudents(); loadDashboard();
@@ -891,15 +864,12 @@ async function publishSel() {
   } catch (e) { alert(e.message); loadCerts(); }
 }
 
-/* ---------------- portal QR ---------------- */
+/* ---------------- student portal (direct link) ---------------- */
 async function loadPortal() {
   const e = EVENTS.find(x => x.id === EV) || (EVENTS = (await api("/api/admin/events")).events).find(x => x.id === EV);
   if (!e?.portal_token) { toast("Generating portal link…"); return; }
   PURL = `${location.origin}/portal/${e.portal_token}`;
   $("portalUrl").value = PURL;
-  $("qrImg").src = `/api/admin/events/${EV}/portal-qr`;
-  $("qrImg").style.opacity = 1;
-  $("qrDl").href = `/api/admin/events/${EV}/portal-qr`;
   const btn = $("portalToggle");
   const active = !!e.portal_active;
   btn.textContent = active ? "🟢 Portal ACTIVE — click to DEACTIVATE" : "🔴 Portal INACTIVE — click to ACTIVATE";
@@ -913,18 +883,10 @@ async function togglePortal() {
   loadPortal(); loadDashboard();
 }
 async function regenToken() {
-  if (!confirm("Regenerate the portal link? The old QR code will stop working — print the new one.")) return;
+  if (!confirm("Regenerate the portal link? The old link will stop working — share the new one.")) return;
   await api(`/api/admin/events/${EV}/regenerate-portal-token`, { method: "POST" });
   const d = await api("/api/admin/events");
   EVENTS = d.events; toast("New portal link generated"); loadPortal();
-}
-function printQR() {
-  const w = window.open("", "QR", "width=560,height=760");
-  const e = EVENTS.find(x => x.id === EV);
-  w.document.write(`<!DOCTYPE html><html><head><title>Portal QR</title>
-  <style>body{font-family:Georgia,serif;text-align:center;padding:44px 30px}h2{color:#1f5c36;margin:8px 0}p{color:#666;font-size:13px;line-height:1.6}img{width:300px;height:300px}</style></head>
-  <body><div style="font-size:40px">🌿</div><h2>${esc(e.title)}</h2><p>${esc(e.institute)}<br>Scan to download your e-certificate · ${esc(e.event_date)}<br>⬇</p><img src="/api/admin/events/${EV}/portal-qr"><p style="margin-top:10px;font-size:11px">${esc(PURL)}</p></body></html>`);
-  w.document.close(); setTimeout(() => w.print(), 500);
 }
 
 /* start */

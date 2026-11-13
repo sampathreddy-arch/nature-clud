@@ -1,533 +1,438 @@
 /* ============================================================
-   certgen.js — Certificate rendering (HTML preview + PDF)
-   Design: Aurora Higher Education and Research Academy
-   Pattern: Aurora Deemed University "NATURE CLUB PRESENTS" Pattern
+   certgen.js — Official Eco Games certificate rendering
+   Template-based generation (pdf-lib):
+   the three uploaded Aurora / Nature Club certificate PDFs are
+   used as-is as page backgrounds; only the student fields,
+   certificate ID and signature areas are drawn on top.
+
+   Templates (copies of the uploaded originals, never modified):
+     templates/Eco_Games_Winner.pdf          (CERTIFICATE OF ACHIEVEMENT — Winner)
+     templates/Eco_Games_Runner_Up.pdf       (CERTIFICATE OF ACHIEVEMENT — Runner-up)
+     templates/Eco_Games_Participation.pdf   (CERTIFICATE OF PARTICIPATION)
+
+   The uploaded Winner and Runner-up PDFs contain overlapping text
+   (a leftover "OF PARTICIPATION" subtitle and the participation
+   recognition sentence) — both are covered with a background patch
+   and re-drawn correctly at the same design position.
+
+   Published certificates include a QR code that opens the student's
+   direct download endpoint. It does not point to a verification endpoint.
    ============================================================ */
 const fs = require("node:fs");
 const path = require("node:path");
-const PDFDocument = require("pdfkit");
+const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 
-/* ---- colour palette matching template ---- */
-const MAROON     = "#801426";   // Aurora rich maroon (outer border, CERTIFICATE title, name line)
-const MAROON_TXT = "#981b32";   // bright maroon
-const GREEN      = "#1b5c2d";   // Nature club forest green (inner border, subtitle, event title)
-const TEXT_BLACK = "#1a1a1a";   // main headings & body
-const TEXT_MUTED = "#3a3a3a";   // secondary text & details
-const BG_IVORY   = "#ffffff";   // crisp ivory-white background
+/* ---------------- palette (sampled from the official templates) ---------------- */
+const MAROON     = "#A81C4A";  // Aurora maroon — big word, name rule
+const GREEN_SUB  = "#1B5E20";  // forest green — subtitle, NATURE CLUB PRESENTS, footer
+const GREEN_TITLE= "#2E7D32";  // bright green — event title
+const BODY       = "#2B2B2B";  // body text
+const BG_CREAM   = "#FFFDF7";  // template ivory background
 
-const ACFG = {
-  "Participation": { sub: "OF PARTICIPATION", title: "CERTIFICATE", prefix: "in recognition of enthusiastic and active participation in" },
-  "First Prize":   { sub: "OF EXCELLENCE",    title: "CERTIFICATE", prefix: "in recognition of outstanding achievement and securing FIRST PRIZE in" },
-  "Second Prize":  { sub: "OF EXCELLENCE",    title: "CERTIFICATE", prefix: "in recognition of outstanding achievement and securing SECOND PRIZE in" },
-  "Third Prize":   { sub: "OF EXCELLENCE",    title: "CERTIFICATE", prefix: "in recognition of outstanding achievement and securing THIRD PRIZE in" }
+/* ---------------- certificate categories ---------------- */
+/* Exactly three official categories. Legacy categories stored in the
+   database (First Prize / Second Prize / Third Prize) are mapped to the
+   closest official template at render time; stored records are untouched. */
+const CATEGORIES = ["Winner", "Runner-up", "Participation"];
+
+const TEMPLATES = {
+  Winner: {
+    file: "Eco_Games_Winner.pdf",
+    sub: "OF ACHIEVEMENT",
+    recognition: "In recognition of outstanding performance and securing the Winner position in",
+    fixOverlay: true,
+  },
+  "Runner-up": {
+    file: "Eco_Games_Runner_Up.pdf",
+    sub: "OF ACHIEVEMENT",
+    recognition: "In recognition of excellent performance and securing the Runner-up position in",
+    fixOverlay: true,
+  },
+  Participation: {
+    file: "Eco_Games_Participation.pdf",
+    sub: "OF PARTICIPATION",
+    recognition: "In recognition of enthusiastic and active participation in",
+    fixOverlay: false,
+  },
 };
 
+function normaliseCategory(cat) {
+  const k = String(cat || "").trim().toLowerCase();
+  if (["winner", "first prize", "first", "1st"].includes(k)) return "Winner";
+  if (["runner-up", "runner up", "runnerup", "second prize", "second", "2nd"].includes(k)) return "Runner-up";
+  if (["participation", "participant", "third prize", "third", "3rd"].includes(k)) return "Participation";
+  return null;
+}
+
+/* ---------------- template geometry (points, y measured from page bottom) ---------------- */
+const PAGE_W = 841.89, PAGE_H = 595.28;
+const CX = PAGE_W / 2;
+const G = {
+  certWord:   { y: 457.3, size: 44 },                    // CERTIFICATE
+  headerMain: { y: 545.5, size: 10.5 },                  // university name
+  headerSub:  { y: 536.8, size: 9.6 },                   // official accreditation line
+  headerSite: { y: 525.3, size: 9.5 },                   // website, below the accreditation line
+  subWord:    { y: 435.3, size: 12.5, targetW: 193.1 },  // green subtitle line
+  goldLine:   { y: 423.2, x0: 330.5, x1: 511.0 },        // gold separator (in template)
+  presented:  { y: 400.3, size: 14 },
+  nameRule:   { y: 355.3, x0: 170, x1: 672 },            // maroon rule (in template)
+  name:       { y: 367.0, maxW: 496, maxSize: 30, minSize: 12 },
+  yearBlank:  { x0: 263.0, x1: 329.5 },                  // year blank line [261..331.5]
+  deptBlank:  { x0: 453.5, x1: 620.0 },                  // dept blank line [451.5..622]
+  metaRow:    { y: 325.3, size: 13 },
+  recognition:{ y: 293.3, size: 13.5, coverTop: 309, coverBottom: 285 },
+  eventTitle: { y: 261.3, size: 24, targetW: 452.0 },
+  orgLine:    { y: 231.3, size: 13 },
+  dateLine:   { y: 214.3, size: 13 },
+  activities: { y: 189.3, size: 8.5 },
+  tagline:    { y: 161.3, size: 8.5, targetW: 322.3 },
+  certId:     { x: 90, y: 44, size: 7.5 },               // bottom-left corner (away from the partner shield)
+  sigLine:    { y: 90 }, sigRole: { y: 80 }, sigBlockW: 130,
+};
+/* overlay patch regions used to erase the duplicated text in the
+   uploaded Winner / Runner-up files (subtitle + recognition lines) */
+const PATCH_SUB = { x: 296, y: 427.5, w: 250, h: 24.5 };
+const PATCH_RECOG = { x: 238, y: 285, w: 384, h: 24 };
+/* The source design carries two raster header lines below the academy name:
+   "(Deemed-to-be-University, Estd. u/s 33 of UGC Act 1956)" (y≈536.8) and
+   "Bhongir, Yadadri, Telangana | www.aurora.edu.in" (y≈525.3). They are part
+   of the artwork image, so both are masked on generated copies (measured
+   glyph bands: 533.5–544.8 and 523–533; academy line starts at 545.3 and
+   NATURE CLUB text at 512.5 — the patch sits between those) and the campus
+   location is dropped: the institutional line and the site URL are
+   re-typeset in their place. */
+const PATCH_CAMPUS = { x: 285, y: 521, w: 272, h: 23.8 };
+const INST_LINE = "(Deemed-to-be-University, Estd. u/s 33 of UGC Act 1956)";
+const INST_INK = "#5A3431";
+const TEMPLATE_DATE = "14 November 2026";
+const TEMPLATE_TITLE = "ECO GAMES – PLAY FOR THE PLANET";
+
+/* ---------------- helpers ---------------- */
+const hexRGB = (h) => rgb(
+  parseInt(h.slice(1, 3), 16) / 255,
+  parseInt(h.slice(3, 5), 16) / 255,
+  parseInt(h.slice(5, 7), 16) / 255
+);
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+/* make a string safe for the standard PDF fonts (WinAnsi) */
+function win(s) {
+  return String(s ?? "")
+    .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-").replace(/\u2026/g, "...")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "")
+    .trim();
+}
+
+const templateCache = new Map();
+function loadTemplateBytes(file) {
+  if (!templateCache.has(file)) {
+    templateCache.set(file, fs.readFileSync(path.join(__dirname, "templates", file)));
+  }
+  return templateCache.get(file);
+}
+
+/* font-width measuring (shared by PDF + HTML preview so both fit alike) */
+let METRICS = null;
+async function getFontMetrics() {
+  if (!METRICS) {
+    const doc = await PDFDocument.create();
+    const fonts = {};
+    for (const name of ["TimesRomanBold", "TimesRoman", "TimesRomanItalic", "HelveticaBold", "Helvetica"]) {
+      fonts[name] = await doc.embedFont(StandardFonts[name]);
+    }
+    METRICS = { fonts };
+  }
+  return { w: (name, size, text) => METRICS.fonts[name].widthOfTextAtSize(text, size) };
+}
+
+async function fitSize(getW, fontName, text, maxSize, minSize, maxW) {
+  let size = maxSize;
+  while (size > minSize && getW(fontName, size, text) > maxW) size -= 0.5;
+  return size;
+}
+function fitSizeSync(M, fontName, text, maxSize, minSize, maxW) {
+  let size = maxSize;
+  while (size > minSize && M.w(fontName, size, text) > maxW) size -= 0.5;
+  return size;
+}
+
 /* ================================================================
-   HTML CSS for Screen Preview & Print
+   PDF GENERATION — official template + dynamic overlay
+   ================================================================ */
+async function generatePDF(d) {
+  const cat = normaliseCategory(d.category) || "Participation";
+  const T = TEMPLATES[cat];
+
+  const pdf = await PDFDocument.load(loadTemplateBytes(T.file));
+  const page = pdf.getPage(0);
+  const { w: gw } = await getFontMetrics();
+
+  const timesBold = await pdf.embedFont(StandardFonts.TimesRomanBold);
+  const timesRoman = await pdf.embedFont(StandardFonts.TimesRoman);
+  const timesItalic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+  const helvBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const helv = await pdf.embedFont(StandardFonts.Helvetica);
+
+  const drawCentered = (text, font, size, y, color, opts = {}) => {
+    const cs = opts.charSpacing || 0;
+    page.drawText(text, {
+      x: CX - (font.widthOfTextAtSize(text, size) + cs * Math.max(0, text.length - 1)) / 2,
+      y, size, font, color, ...(cs ? { characterSpacing: cs } : {}),
+    });
+  };
+  /* pdf-lib drawText has no letter-spacing option — draw char by char to
+     reproduce the template's letterspaced style exactly */
+  const drawSpaced = (text, font, size, y, color, charSpacing) => {
+    const cs = charSpacing || 0;
+    let x = CX - (font.widthOfTextAtSize(text, size) + cs * Math.max(0, text.length - 1)) / 2;
+    for (const ch of text) {
+      page.drawText(ch, { x, y, size, font, color });
+      x += font.widthOfTextAtSize(ch, size) + cs;
+    }
+  };
+  const drawCenteredIn = (text, font, size, y, color, x0, x1) => {
+    page.drawText(text, {
+      x: (x0 + x1) / 2 - font.widthOfTextAtSize(text, size) / 2,
+      y, size, font, color,
+    });
+  };
+  /* character spacing that stretches text to a target width (matches template look) */
+  const spreadTo = (text, font, size, targetW) => {
+    const nat = font.widthOfTextAtSize(text, size);
+    const cs = (targetW - nat) / Math.max(1, text.length - 1);
+    return cs > 0 ? cs : 0;
+  };
+  const patch = (p) => page.drawRectangle({ x: p.x, y: p.y, width: p.w, height: p.h, color: hexRGB(BG_CREAM) });
+
+  /* Mask the raster header lines (institution line + campus location line)
+     in the artwork and re-typeset them without the campus location. Only
+     generated copies are patched; the source PDFs stay untouched. */
+  patch(PATCH_CAMPUS);
+  drawCentered(INST_LINE, helvBold, G.headerSub.size, G.headerSub.y, hexRGB(INST_INK));
+  drawCentered("www.aurora.edu.in", helvBold, G.headerSite.size, G.headerSite.y, hexRGB(INST_INK));
+
+  /* ---- 1. Fix the overlapping heading & recognition text (Winner / Runner-up) ---- */
+  if (T.fixOverlay) {
+    patch(PATCH_SUB);     // erases duplicated "OF PARTICIPATION" + category word
+    drawSpaced(T.sub, helvBold, G.subWord.size, G.subWord.y, hexRGB(GREEN_SUB),
+      spreadTo(T.sub, helvBold, G.subWord.size, G.subWord.targetW));
+  }
+  /* Re-typeset the recognition line for every template so capitalization and
+     category wording agree between Winner, Runner-up, and Participation. */
+  patch(PATCH_RECOG);
+  drawCentered(win(T.recognition), timesRoman, G.recognition.size, G.recognition.y, hexRGB(BODY));
+  /* Add sentence punctuation to the event title already printed in the art. */
+  page.drawText(".", { x: 650.5, y: G.eventTitle.y, size: G.eventTitle.size, font: timesBold, color: hexRGB(GREEN_TITLE) });
+
+  /* ---- 2. Event date (only if it differs from the one printed in the template) ---- */
+  const evDate = win(d.event.event_date || TEMPLATE_DATE) || TEMPLATE_DATE;
+  if (evDate && evDate !== TEMPLATE_DATE) {
+    page.drawRectangle({ x: 265, y: 210, width: 320, height: 10, color: hexRGB(BG_CREAM) });
+    drawCentered(`on ${evDate} at the University Seminar Hall.`, timesRoman, G.dateLine.size, G.dateLine.y, hexRGB(BODY));
+  }
+
+  /* ---- 3. Recipient name above the maroon rule (shrink-to-fit, no overlap) ---- */
+  const name = win(d.student.name) || "Student Name";
+  const nameSize = await fitSize(gw, "TimesRomanBold", name, G.name.maxSize, G.name.minSize, G.name.maxW);
+  drawCentered(name, timesBold, nameSize, G.name.y, hexRGB("#1F1F1F"));
+
+  /* ---- 4. B.Tech year + department on the template blanks ---- */
+  const year = win(d.student.year);
+  if (year) {
+    const s = await fitSize(gw, "TimesRoman", year, G.metaRow.size, 6, G.yearBlank.x1 - G.yearBlank.x0);
+    drawCenteredIn(year, timesRoman, s, G.metaRow.y, hexRGB(BODY), G.yearBlank.x0, G.yearBlank.x1);
+  }
+  const dept = win(d.student.department);
+  if (dept) {
+    const s = await fitSize(gw, "TimesRoman", dept, G.metaRow.size, 6, G.deptBlank.x1 - G.deptBlank.x0);
+    drawCenteredIn(dept, timesRoman, s, G.metaRow.y, hexRGB(BODY), G.deptBlank.x0, G.deptBlank.x1);
+  }
+
+  /* ---- 5. Signature areas (bottom band, left & right of the partner logo) ---- */
+  const putSig = async (buf, cx, role, fallback) => {
+    const r = win(role || "");
+    if (!buf && !r) return;
+    if (buf) {
+      try {
+        const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50;
+        const img = isPng ? await pdf.embedPng(buf) : await pdf.embedJpg(buf);
+        const scale = Math.min(120 / img.width, 34 / img.height);
+        page.drawImage(img, {
+          x: cx - (img.width * scale) / 2,
+          y: G.sigLine.y + 2,
+          width: img.width * scale,
+          height: img.height * scale,
+        });
+      } catch { /* unsupported image type — line & role still drawn */ }
+    }
+    page.drawLine({
+      start: { x: cx - G.sigBlockW / 2 + 5, y: G.sigLine.y },
+      end: { x: cx + G.sigBlockW / 2 - 5, y: G.sigLine.y },
+      thickness: 0.9, color: hexRGB("#555555"),
+    });
+    drawCenteredIn(r || fallback, helvBold, 7.5, G.sigRole.y, hexRGB(BODY), cx - G.sigBlockW / 2, cx + G.sigBlockW / 2);
+    if (r && fallback && r !== fallback) {
+      drawCenteredIn(win(fallback), helv, 6.5, G.sigRole.y - 9, hexRGB("#666666"), cx - G.sigBlockW / 2, cx + G.sigBlockW / 2);
+    }
+  };
+  await putSig(d.sig1Buf, CX - 181, d.event.sig1_role, "Faculty Coordinator");
+  await putSig(d.sig2Buf, CX + 181, d.event.sig2_role, "Principal");
+
+  /* ---- 6. Unique certificate ID (bottom-left) ---- */
+  if (d.certUid) {
+    page.drawText(`Certificate ID: ${win(d.certUid)}`, {
+      x: G.certId.x, y: G.certId.y, size: G.certId.size, font: helv, color: hexRGB("#6B6B6B"),
+    });
+  }
+
+  const bytes = await pdf.save({ useObjectStreams: false });
+  return Buffer.from(bytes);
+}
+
+/* ================================================================
+   HTML PREVIEW — faithful replica of the official template layout
+   (same geometry constants as the PDF overlay, positioned in pt)
    ================================================================ */
 function certCSS() {
   return `
 @page{size:A4 landscape;margin:0}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#222;font-family:Georgia,'Times New Roman',serif}
-
-/* Outer Certificate Canvas */
-.cert{
-  width:297mm;height:210mm;margin:12px auto;
-  position:relative;overflow:hidden;
-  background:${BG_IVORY};color:${TEXT_BLACK};
-  /* Double border: Outer Maroon (3px), 8px gap, Inner Green (1.5px) */
-  border:3px solid ${MAROON};
-  outline:1.5px solid ${GREEN};
-  outline-offset:-9px;
-  box-shadow:0 8px 30px rgba(0,0,0,0.35);
-}
-
-/* 4 Corner Leaf Sprigs */
-.leaf-corn{
-  position:absolute;width:58px;height:58px;
-  z-index:4;pointer-events:none;opacity:.95;
-  object-fit:contain;
-}
-.leaf-corn.tl{top:13px;left:13px}
-.leaf-corn.tr{top:13px;right:13px;transform:scaleX(-1)}
-.leaf-corn.bl{bottom:13px;left:13px;transform:scaleY(-1)}
-.leaf-corn.br{bottom:13px;right:13px;transform:scale(-1, -1)}
-
-/* Inner Content Area */
-.inner{
-  position:absolute;inset:12px;z-index:2;
-  display:flex;flex-direction:column;align-items:center;text-align:center;
-  padding:14px 44px 10px;
-}
-
-/* Top Header Row */
-.header-row{
-  width:100%;display:flex;align-items:center;justify-content:space-between;
-  margin-bottom:8px;padding:0 6px;
-}
-.header-col-left{width:180px;text-align:left}
-.header-col-left img{max-height:46px;max-width:170px;object-fit:contain;display:block}
-.header-col-left .campus-tag{
-  font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;
-  color:${MAROON};letter-spacing:1px;margin-top:2px;text-transform:uppercase;
-}
-
-.header-col-center{flex:1;text-align:center;padding:0 8px}
-.inst-title{
-  font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:bold;
-  letter-spacing:.8px;color:#111;text-transform:uppercase;line-height:1.25;
-}
-.inst-sub{
-  font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;
-  color:#222;margin-top:2px;
-}
-.inst-loc{
-  font-family:Arial,Helvetica,sans-serif;font-size:9.5px;
-  color:#222;margin-top:1px;
-}
-
-.header-col-right{width:180px;display:flex;justify-content:flex-end}
-.header-col-right img{max-height:56px;max-width:110px;object-fit:contain}
-
-/* Presenter Line */
-.presenter-line{
-  font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:bold;
-  letter-spacing:3.5px;color:${GREEN};text-transform:uppercase;
-  margin:4px 0 2px;
-}
-
-/* Big CERTIFICATE Heading */
-.cert-main-word{
-  font-size:44px;font-weight:bold;letter-spacing:10px;
-  color:${MAROON_TXT};text-transform:uppercase;margin:0 0 1px;line-height:1.05;
-}
-
-/* Sub-title: OF PARTICIPATION */
-.cert-sub-word{
-  font-size:14px;font-weight:bold;letter-spacing:6px;
-  color:${GREEN};text-transform:uppercase;margin-bottom:6px;
-}
-
-/* Presentation Intro */
-.intro-line{
-  font-size:13px;font-style:italic;color:#333;margin-bottom:6px;
-}
-
-/* Student Name & Maroon Line */
-.name-wrap{
-  width:620px;position:relative;margin:0 auto 6px;text-align:center;
-}
-.student-name{
-  font-size:32px;font-weight:bold;color:#111;
-  letter-spacing:.8px;padding-bottom:2px;
-}
-.name-rule{
-  width:100%;height:1.5px;background:${MAROON};margin:2px auto 6px;
-}
-
-/* Academic Details Meta (B.Tech ... Year, Department of ...) */
-.meta-row{
-  font-size:12.5px;color:#222;margin-bottom:8px;
-}
-.meta-row .val{font-weight:bold;color:${GREEN};padding:0 4px}
-.meta-row .blank{display:inline-block;border-bottom:1px solid #777;min-width:60px;height:14px;vertical-align:bottom}
-.meta-row .blank-lg{min-width:160px}
-
-/* Recognition text */
-.recog-line{
-  font-size:12.5px;color:#222;margin-bottom:6px;
-}
-
-/* Main Event Title */
-.event-title-banner{
-  font-size:21px;font-weight:bold;letter-spacing:1px;
-  color:${GREEN};text-transform:uppercase;margin:2px 0 5px;
-}
-
-/* Organised By venue & date */
-.org-details{
-  font-size:11.5px;color:#222;line-height:1.45;margin-bottom:6px;
-}
-
-/* Activities bullet list */
-.activities-line{
-  font-size:9.5px;color:${GREEN};font-weight:600;
-  letter-spacing:.4px;margin-bottom:8px;
-}
-
-/* Bottom Tagline */
-.tagline-banner{
-  font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;
-  letter-spacing:2.8px;color:${GREEN};text-transform:uppercase;
-  margin-bottom:10px;
-}
-
-/* Bottom Technology Partner & Signatures */
-.footer-row{
-  width:100%;margin-top:auto;
-  display:flex;align-items:flex-end;justify-content:space-between;
-  padding:0 24px 2px;
-}
-.sig-block{width:160px;text-align:center}
-.sig-block img{height:42px;object-fit:contain;margin-bottom:-4px}
-.sig-block .sline{border-top:1.2px solid #555;margin:3px auto 2px;width:130px}
-.sig-block .srole{font-size:10px;font-weight:bold;color:#222}
-.sig-block .ssub{font-size:8.5px;color:#666}
-
-.partner-block{flex:1;text-align:center}
-.partner-tag{
-  font-family:Arial,Helvetica,sans-serif;font-size:8px;font-weight:bold;
-  letter-spacing:1.5px;color:#222;text-transform:uppercase;margin-bottom:4px;
-}
-.partner-block img{height:26px;width:26px;object-fit:contain;display:inline-block}
-
-@media print{
-  body{background:#fff}
-  .cert{margin:0;box-shadow:none;page-break-after:always}
-  .cert:last-child{page-break-after:auto}
-}
+body{background:#3a4d3a;font-family:'Times New Roman',Times,serif;color:${BODY}}
+.cert{position:relative;width:${PAGE_W}pt;height:${PAGE_H}pt;margin:12px auto;background:${BG_CREAM};overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.abs{position:absolute;left:0;right:0;text-align:center;line-height:1;white-space:nowrap}
+.leaf{position:absolute;width:44pt;height:44pt;object-fit:contain;z-index:3}
+.leaf.tl{top:20pt;left:20pt}.leaf.tr{top:20pt;right:20pt;transform:scaleX(-1)}
+.leaf.bl{bottom:20pt;left:20pt;transform:scaleY(-1)}.leaf.br{bottom:20pt;right:20pt;transform:scale(-1,-1)}
+.wm{position:absolute;top:112pt;left:78pt;height:36pt;object-fit:contain}
+.emblem{position:absolute;top:96pt;right:78pt;height:52pt;object-fit:contain}
+.inst1{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:10.5pt;color:#1F1F1F;letter-spacing:.3pt}
+  .inst2{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:${G.headerSub.size}pt;color:#5A3431}
+  .inst3{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:${G.headerSite.size}pt;color:#5A3431}
+.nature{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:9.5pt;letter-spacing:3.6pt;color:${GREEN_SUB}}
+.certword{font-size:44pt;font-weight:bold;letter-spacing:10pt;color:${MAROON};text-indent:10pt}
+.subtitle{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:12.5pt;color:${GREEN_SUB};letter-spacing:5pt;text-indent:5pt}
+.goldsep{position:absolute;left:${G.goldLine.x0}pt;width:${(G.goldLine.x1 - G.goldLine.x0).toFixed(1)}pt;top:${(PAGE_H - G.goldLine.y).toFixed(1)}pt;height:0;border-top:1.1pt solid #BF9130}
+.goldsep::after{content:'';position:absolute;left:50%;top:-2.6pt;margin-left:-2.6pt;width:5.2pt;height:5.2pt;border-radius:50%;background:#BF9130}
+.presented{font-style:italic;font-size:14pt;color:${BODY}}
+.sname{font-weight:bold;font-size:30pt;color:#1F1F1F}
+.namerule{position:absolute;left:${G.nameRule.x0}pt;width:${(G.nameRule.x1 - G.nameRule.x0).toFixed(1)}pt;top:${(PAGE_H - G.nameRule.y).toFixed(1)}pt;border-top:1.1pt solid ${MAROON}}
+.meta{font-size:13pt;color:${BODY}}
+.meta .seg{position:absolute;white-space:nowrap}
+.recog{font-size:13.5pt;color:${BODY}}
+.evtitle{font-weight:bold;font-size:24pt;letter-spacing:2.7pt;text-indent:2.7pt;color:${GREEN_TITLE}}
+.orgline,.dateline{font-size:13pt;color:${BODY}}
+.acts{font-family:Arial,Helvetica,sans-serif;font-size:8.5pt;color:${GREEN_SUB}}
+.tagline{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:8.5pt;letter-spacing:3.4pt;text-indent:3.4pt;color:${GREEN_SUB}}
+.certid{font-family:Arial,Helvetica,sans-serif;font-size:7.5pt;color:#6B6B6B;letter-spacing:.4pt}
+.tech{font-family:'Times New Roman',serif;font-weight:bold;font-size:10.5pt;letter-spacing:.6pt;color:#1F1F1F}
+.niat{object-fit:fill;display:block;clip-path:polygon(0 0,100% 0,100% 62%,92% 77%,78% 89%,50% 100%,22% 89%,8% 77%,0 62%)}
+.sig{position:absolute;width:${G.sigBlockW}pt;text-align:center}
+.sig img{max-width:100%;max-height:30pt;object-fit:contain;margin-bottom:-2pt}
+.sig .sline{border-top:.9pt solid #555;margin:2pt 4pt 0}
+.sig .srole{font-family:Arial,Helvetica,sans-serif;font-weight:bold;font-size:7.5pt;color:${BODY};margin-top:2pt}
+.sig .ssub{font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;color:#666;margin-top:1.5pt}
+@media print{body{background:#fff}.cert{margin:0;box-shadow:none;page-break-after:always}.cert:last-child{page-break-after:auto}}
 `;
 }
 
-function esc(s) {
-  return String(s ?? "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;");
-}
+/* baseline (PDF, from bottom) -> CSS top (from page top) for a line of font-size s */
+const top = (y, s) => (PAGE_H - y - s * 0.8).toFixed(2) + "pt";
 
-/* ---------------- Render HTML Certificate ---------------- */
 function renderCertHTML(d) {
-  const a = ACFG[d.category] || ACFG.Participation;
-  const heading = a.title;
-  const subHeading = a.sub;
-  const prefixText = a.prefix;
+  const cat = normaliseCategory(d.category) || "Participation";
+  const T = TEMPLATES[cat];
 
-  const eventDate = esc(d.student.date || d.event.event_date || "14 November 2026");
-  const eventTitle = esc(d.event.title || "ECO GAMES – PLAY FOR THE PLANET");
+  const eventDate = d.event.event_date || TEMPLATE_DATE;
+  const name = win(d.student.name) || "Student Name";
+  const year = win(d.student.year);
+  const dept = win(d.student.department);
+  const M = getFontMetricsSync(); // sync cached metrics (available after first PDF gen)
 
-  const yearVal = d.student.year ? `<span class="val">${esc(d.student.year)}</span>` : `<span class="blank"></span>`;
-  const deptVal = d.student.department ? `<span class="val">${esc(d.student.department)}</span>` : `<span class="blank blank-lg"></span>`;
-  const rollNote = d.student.roll_number ? ` &nbsp; (Roll No: <span class="val">${esc(d.student.roll_number)}</span>)` : "";
+  const nameSize = M ? fitSizeSync(M, "TimesRomanBold", name, G.name.maxSize, G.name.minSize, G.name.maxW) : G.name.maxSize;
+  const yearSize = year && M ? fitSizeSync(M, "TimesRoman", year, G.metaRow.size, 6, G.yearBlank.x1 - G.yearBlank.x0) : G.metaRow.size;
+  const deptSize = dept && M ? fitSizeSync(M, "TimesRoman", dept, G.metaRow.size, 6, G.deptBlank.x1 - G.deptBlank.x0) : G.metaRow.size;
 
-  const renderSig = (img, role, fallback) => {
-    if (!img && !role) return `<div class="sig-block"></div>`;
-    const r = role || fallback;
-    const sub = (role && role !== fallback) ? `<div class="ssub">${esc(fallback)}</div>` : "";
-    return `
-      <div class="sig-block">
-        ${img ? `<img src="${img}" alt="sig">` : `<div style="height:42px"></div>`}
-        <div class="sline"></div>
-        <div class="srole">${esc(r)}</div>${sub}
-      </div>`;
+  /* letter-spacing stretched to the same line widths as the template (PDF parity) */
+  const spread = (fontName, size, text, targetW, fallback) => {
+    if (!M) return fallback;
+    const nat = M.w(fontName, size, text);
+    const cs = (targetW - nat) / Math.max(1, text.length - 1);
+    return (cs > 0 ? cs : 0).toFixed(2) + "pt";
+  };
+  const subCs = spread("HelveticaBold", 12.5, T.sub, G.subWord.targetW, "5pt");
+  const certCs = spread("TimesRomanBold", 44, "CERTIFICATE", 365.6, "10pt");
+  const evCs = spread("TimesRomanBold", 24, d.event.title || TEMPLATE_TITLE, G.eventTitle.targetW, "2.7pt");
+  const tagCs = spread("HelveticaBold", 8.5, "BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE", G.tagline.targetW, "3.4pt");
+
+  const sigBlock = (buf, role, fallback, cx) => {
+    const r = win(role || "");
+    if (!buf && !r) return "";
+    return `<div class="sig" style="left:${(cx - G.sigBlockW / 2).toFixed(1)}pt;top:${(PAGE_H - 124).toFixed(1)}pt">
+      ${buf ? `<img src="${buf}" alt="signature">` : ""}
+      <div class="sline"></div>
+      <div class="srole">${esc(r || fallback)}</div>
+      ${r && fallback && r !== fallback ? `<div class="ssub">${esc(fallback)}</div>` : ""}
+    </div>`;
   };
 
   return `
 <div class="cert" data-cert="${esc(d.certUid)}">
-  <!-- 4 Corner Leaf Sprigs -->
-  <img class="leaf-corn tl" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
-  <img class="leaf-corn tr" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
-  <img class="leaf-corn bl" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
-  <img class="leaf-corn br" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
+  <img class="leaf tl" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
+  <img class="leaf tr" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
+  <img class="leaf bl" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
+  <img class="leaf br" src="/leaf_corner_tri.png" alt="" onerror="this.style.display='none'">
 
-  <div class="inner">
-    <!-- Top Header Row -->
-    <div class="header-row">
-      <div class="header-col-left">
-        <img src="${d.logo || '/aurora_wordmark.png'}" alt="Aurora University" onerror="this.style.display='none'">
-        <div class="campus-tag">BHONGIR CAMPUS</div>
-      </div>
-      <div class="header-col-center">
-        <div class="inst-title">AURORA HIGHER EDUCATION AND RESEARCH ACADEMY</div>
-        <div class="inst-sub">(Deemed-to-be-University, Estd. u/s 33 of UGC Act 1956)</div>
-        <div class="inst-loc">Bhongir, Yadadri, Telangana | www.aurora.edu.in</div>
-      </div>
-      <div class="header-col-right">
-        <img src="/aurora_emblem.png" alt="Aurora Emblem" onerror="this.style.display='none'">
-      </div>
-    </div>
+  <img class="wm" src="${d.logo || "/aurora_wordmark.png"}" alt="Aurora Deemed-to-be-University" onerror="this.style.display='none'">
+  <img class="emblem" src="/aurora_emblem.png" alt="Aurora emblem" onerror="this.style.display='none'">
 
-    <!-- Presenter Line -->
-    <div class="presenter-line">NATURE CLUB PRESENTS</div>
+  <div class="abs inst1" style="top:${top(G.headerMain.y, G.headerMain.size)};transform:scaleX(.72)">AURORA HIGHER EDUCATION AND RESEARCH ACADEMY</div>
+  <div class="abs inst2" style="top:${top(G.headerSub.y, G.headerSub.size)}">${esc(INST_LINE)}</div>
+  <div class="abs inst3" style="top:${top(G.headerSite.y, G.headerSite.size)}">www.aurora.edu.in</div>
 
-    <!-- Title: CERTIFICATE -->
-    <div class="cert-main-word">${esc(heading)}</div>
+  <div class="abs nature" style="top:${top(G.certWord.y + 48, 9.5)}">NATURE CLUB PRESENTS</div>
+  <div class="abs certword" style="top:${top(G.certWord.y, 44)};letter-spacing:${certCs};text-indent:${certCs}">CERTIFICATE</div>
+  <div class="abs subtitle" style="top:${top(G.subWord.y, 12.5)};letter-spacing:${subCs};text-indent:${subCs}">${esc(T.sub)}</div>
+  <div class="goldsep"></div>
 
-    <!-- Subtitle: OF PARTICIPATION -->
-    <div class="cert-sub-word">${esc(subHeading)}</div>
+  <div class="abs presented" style="top:${top(G.presented.y, 14)}">This certificate is proudly presented to</div>
+  <div class="abs sname" style="top:${top(G.name.y, nameSize)};font-size:${nameSize}pt">${esc(name)}</div>
+  <div class="namerule"></div>
 
-    <!-- Intro Line -->
-    <div class="intro-line">This certificate is proudly presented to</div>
-
-    <!-- Recipient Name & Maroon Underline -->
-    <div class="name-wrap">
-      <div class="student-name">${esc(d.student.name || "Student Name")}</div>
-      <div class="name-rule"></div>
-    </div>
-
-    <!-- Academic Details: B.Tech ... Year, Department of ... -->
-    <div class="meta-row">
-      B.Tech &nbsp; ${yearVal} &nbsp; Year, &nbsp; Department of &nbsp; ${deptVal} ${rollNote}
-    </div>
-
-    <!-- Recognition Line -->
-    <div class="recog-line">${prefixText}</div>
-
-    <!-- Event Title Banner -->
-    <div class="event-title-banner">${eventTitle}</div>
-
-    <!-- Organization & Venue Details -->
-    <div class="org-details">
-      organized by the Nature Club, Aurora Deemed-to-be-University, Bhongir Campus,<br>
-      on ${eventDate} at the University Seminar Hall.
-    </div>
-
-    <!-- Activities Bullet Line -->
-    <div class="activities-line">
-      Eco Rapid-Fire Quiz &nbsp;•&nbsp; Plastic-Free Challenge &nbsp;•&nbsp; Environmental Dumb Charades &nbsp;•&nbsp; Eco Innovation Challenge
-    </div>
-
-    <!-- Tagline Banner -->
-    <div class="tagline-banner">
-      BE AWARE &nbsp;•&nbsp; REDUCE &nbsp;•&nbsp; ACT &nbsp;•&nbsp; MAKE A DIFFERENCE
-    </div>
-
-    <!-- Footer: Signatures + Technology Partner Logo -->
-    <div class="footer-row">
-      ${renderSig(d.sig1, d.event.sig1_role, "Faculty Coordinator")}
-      <div class="partner-block">
-        <div class="partner-tag">TECHNOLOGY PARTNER</div>
-        <img src="/niat_icon.png" alt="NIAT" onerror="this.style.display='none'">
-      </div>
-      ${renderSig(d.sig2, d.event.sig2_role, "Principal")}
-    </div>
+  <div class="meta">
+    <span class="seg" style="left:220.3pt;top:${top(G.metaRow.y, 13)}">B.Tech</span>
+    <span class="seg" style="left:${G.yearBlank.x0}pt;width:${(G.yearBlank.x1 - G.yearBlank.x0).toFixed(1)}pt;top:${top(G.metaRow.y, yearSize)};text-align:center;font-size:${yearSize}pt">${esc(year || "")}</span>
+    <span class="seg" style="left:334.7pt;top:${top(G.metaRow.y, 13)}">Year,</span>
+    <span class="seg" style="left:372.9pt;top:${top(G.metaRow.y, 13)}">Department of</span>
+    <span class="seg" style="left:${G.deptBlank.x0}pt;width:${(G.deptBlank.x1 - G.deptBlank.x0).toFixed(1)}pt;top:${top(G.metaRow.y, deptSize)};text-align:center;font-size:${deptSize}pt">${esc(dept || "")}</span>
   </div>
+
+  <div class="abs recog" style="top:${top(G.recognition.y, 13.5)}">${esc(T.recognition)}</div>
+  <div class="abs evtitle" style="top:${top(G.eventTitle.y, 24)};letter-spacing:${evCs};text-indent:${evCs}">${esc(d.event.title || TEMPLATE_TITLE)}.</div>
+
+  <div class="abs orgline" style="top:${top(G.orgLine.y, 13)}">organized by the Nature Club, Aurora Deemed-to-be-University,</div>
+  <div class="abs dateline" style="top:${top(G.dateLine.y, 13)}">on ${esc(eventDate)} at the University Seminar Hall.</div>
+
+  <div class="abs acts" style="top:${top(G.activities.y, 8.5)}">Eco Rapid-Fire Quiz&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;Plastic-Free Challenge&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;Environmental Dumb Charades&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;Eco Innovation Challenge</div>
+  <div class="abs tagline" style="top:${top(G.tagline.y, 8.5)};letter-spacing:${tagCs};text-indent:${tagCs}">BE AWARE&nbsp;&nbsp;•&nbsp;&nbsp;REDUCE&nbsp;&nbsp;•&nbsp;&nbsp;ACT&nbsp;&nbsp;•&nbsp;&nbsp;MAKE A DIFFERENCE</div>
+
+  <div class="abs tech" style="top:${top(107, 10.5)}">TECHNOLOGY PARTNER</div>
+  <img class="niat" src="/niat_icon.png" alt="NIAT Technology Partner shield" style="position:absolute;left:${CX - 14}pt;top:${(PAGE_H - 50 - 35).toFixed(2)}pt;width:28pt;height:35pt" onerror="this.style.display='none'">
+
+  ${sigBlock(d.sig1, d.event.sig1_role, "Faculty Coordinator", CX - 181)}
+  ${sigBlock(d.sig2, d.event.sig2_role, "Principal", CX + 181)}
+
+  ${d.certUid ? `<div class="certid" style="position:absolute;left:${G.certId.x}pt;top:${top(G.certId.y, G.certId.size)}">Certificate ID: ${esc(d.certUid)}</div>` : ""}
 </div>`;
 }
 
-/* ================================================================
-   PDF GENERATION  (PDFKit, A4 landscape, Print-Quality)
-   ================================================================ */
-const PT = 2.83465; // 1 mm → points
-function hex(h) { return h.replace("#",""); }
-
-function generatePDF(d) {
-  return new Promise((resolve, reject) => {
-    const a = ACFG[d.category] || ACFG.Participation;
-    const heading = a.title;
-    const subHeading = a.sub;
-    const prefixText = a.prefix;
-
-    const W = 297 * PT, H = 210 * PT;   // 841.89 x 595.28 pt
-
-    const doc = new PDFDocument({
-      size: [W, H],
-      margin: 0,
-      info: {
-        Title: `Certificate – ${d.student.name}`,
-        Author: d.event.organiser || "Nature Club",
-        Subject: `${d.category} - ${d.event.title}`
-      }
-    });
-
-    const chunks = [];
-    doc.on("data", c => chunks.push(c));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-
-    const cx = W / 2;
-
-    /* ---- 1. White Background ---- */
-    doc.rect(0, 0, W, H).fill(hex(BG_IVORY));
-
-    /* ---- 2. Double Border Frame ---- */
-    // Outer border: Maroon ~22pt margin from edge, lineWidth 2.6
-    const mOut = 22;
-    doc.lineWidth(2.6).rect(mOut, mOut, W - (mOut * 2), H - (mOut * 2)).stroke(hex(MAROON));
-
-    // Inner border: Green ~31pt margin from edge, lineWidth 1.3
-    const mIn = 31;
-    doc.lineWidth(1.3).rect(mIn, mIn, W - (mIn * 2), H - (mIn * 2)).stroke(hex(GREEN));
-
-    /* ---- 3. Leaf Corner Ornaments (3-leaf cluster) ---- */
-    const leafPath = path.join(__dirname, "public", "leaf_corner_tri.png");
-    const leafBuf = fs.existsSync(leafPath) ? fs.readFileSync(leafPath) : null;
-
-    if (leafBuf) {
-      const lSize = 44;
-      // Top-Left
-      try { doc.image(leafBuf, mIn + 4, mIn + 4, { width: lSize, height: lSize }); } catch {}
-
-      // Top-Right (flipped horizontally)
-      try {
-        doc.save();
-        doc.translate(W - mIn - 4, mIn + 4);
-        doc.scale(-1, 1);
-        doc.image(leafBuf, 0, 0, { width: lSize, height: lSize });
-        doc.restore();
-      } catch {}
-
-      // Bottom-Left (flipped vertically)
-      try {
-        doc.save();
-        doc.translate(mIn + 4, H - mIn - 4);
-        doc.scale(1, -1);
-        doc.image(leafBuf, 0, 0, { width: lSize, height: lSize });
-        doc.restore();
-      } catch {}
-
-      // Bottom-Right (flipped both)
-      try {
-        doc.save();
-        doc.translate(W - mIn - 4, H - mIn - 4);
-        doc.scale(-1, -1);
-        doc.image(leafBuf, 0, 0, { width: lSize, height: lSize });
-        doc.restore();
-      } catch {}
-    }
-
-    /* ---- 4. Top Header: Wordmark (Left), Emblem (Right), University Info (Center) ---- */
-    const wordmarkPath = path.join(__dirname, "public", "aurora_wordmark.png");
-    const emblemPath = path.join(__dirname, "public", "aurora_emblem.png");
-
-    // Top-Left: Aurora Wordmark
-    const leftLogo = d.logoBuf || (fs.existsSync(wordmarkPath) ? fs.readFileSync(wordmarkPath) : null);
-    if (leftLogo) {
-      try {
-        doc.image(leftLogo, mIn + 18, 48, { fit: [145, 42], align: "left", valign: "top" });
-      } catch {}
-    }
-    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(MAROON);
-    doc.text("BHONGIR CAMPUS", mIn + 18, 92, { width: 145, align: "left", characterSpacing: 0.8 });
-
-    // Top-Right: Aurora Emblem
-    const rightLogo = fs.existsSync(emblemPath) ? fs.readFileSync(emblemPath) : null;
-    if (rightLogo) {
-      try {
-        doc.image(rightLogo, W - mIn - 120, 44, { fit: [100, 56], align: "right", valign: "top" });
-      } catch {}
-    }
-
-    // Center University Header
-    let y = 48;
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#111111");
-    doc.text("AURORA HIGHER EDUCATION AND RESEARCH ACADEMY", 170, y, { width: W - 340, align: "center", characterSpacing: 0.6 });
-    y += 15;
-    doc.font("Helvetica").fontSize(7.8).fillColor("#222222");
-    doc.text("(Deemed-to-be-University, Estd. u/s 33 of UGC Act 1956)", 170, y, { width: W - 340, align: "center" });
-    y += 12;
-    doc.text("Bhongir, Yadadri, Telangana | www.aurora.edu.in", 170, y, { width: W - 340, align: "center" });
-    y += 17;
-
-    /* ---- 5. NATURE CLUB PRESENTS ---- */
-    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(GREEN);
-    doc.text("NATURE CLUB PRESENTS", 100, y, { width: W - 200, align: "center", characterSpacing: 3.5 });
-    y += 17;
-
-    /* ---- 6. CERTIFICATE (Large Maroon Serif) ---- */
-    doc.font("Times-Bold").fontSize(38).fillColor(MAROON_TXT);
-    doc.text(heading, 60, y, { width: W - 120, align: "center", characterSpacing: 9 });
-    y += 42;
-
-    /* ---- 7. OF PARTICIPATION (Green Serif) ---- */
-    doc.font("Times-Bold").fontSize(12.5).fillColor(GREEN);
-    doc.text(subHeading, 60, y, { width: W - 120, align: "center", characterSpacing: 5 });
-    y += 20;
-
-    /* ---- 8. Intro Line ---- */
-    doc.font("Times-Italic").fontSize(11).fillColor("#333333");
-    doc.text("This certificate is proudly presented to", 60, y, { width: W - 120, align: "center" });
-    y += 22;
-
-    /* ---- 9. Recipient Student Name & Maroon Line ---- */
-    doc.font("Times-Bold").fontSize(26).fillColor("#111111");
-    doc.text(d.student.name || "Student Name", 60, y, { width: W - 120, align: "center", characterSpacing: 0.8 });
-    y += 32;
-
-    // Maroon underline
-    doc.moveTo(cx - 240, y).lineTo(cx + 240, y).lineWidth(1.4).stroke(hex(MAROON));
-    y += 10;
-
-    /* ---- 10. Academic Details Line: B.Tech ... Year, Department of ... ---- */
-    const yrStr = d.student.year ? `${d.student.year}` : "_______";
-    const deptStr = d.student.department ? `${d.student.department}` : "________________________";
-    const rollStr = d.student.roll_number ? ` (Roll No: ${d.student.roll_number})` : "";
-    const metaFull = `B.Tech   ${yrStr}   Year,   Department of   ${deptStr}${rollStr}`;
-
-    doc.font("Times-Roman").fontSize(10.5).fillColor("#111111");
-    doc.text(metaFull, 60, y, { width: W - 120, align: "center" });
-    y += 18;
-
-    /* ---- 11. Recognition Sentence ---- */
-    doc.font("Times-Roman").fontSize(10.5).fillColor("#222222");
-    doc.text(prefixText, 60, y, { width: W - 120, align: "center" });
-    y += 18;
-
-    /* ---- 12. Event Title: ECO GAMES – PLAY FOR THE PLANET ---- */
-    const eventTitle = d.event.title || "ECO GAMES – PLAY FOR THE PLANET";
-    doc.font("Times-Bold").fontSize(17).fillColor(GREEN);
-    doc.text(eventTitle, 60, y, { width: W - 120, align: "center", characterSpacing: 0.8 });
-    y += 24;
-
-    /* ---- 13. Organizer & Venue Details ---- */
-    const eventDate = d.student.date || d.event.event_date || "14 November 2026";
-    doc.font("Times-Roman").fontSize(9.8).fillColor("#222222");
-    doc.text(`organized by the Nature Club, Aurora Deemed-to-be-University, Bhongir Campus,`, 60, y, { width: W - 120, align: "center" });
-    y += 13;
-    doc.text(`on ${eventDate} at the University Seminar Hall.`, 60, y, { width: W - 120, align: "center" });
-    y += 18;
-
-    /* ---- 14. Activities Bullet Line ---- */
-    doc.font("Helvetica").fontSize(7.5).fillColor(GREEN);
-    doc.text("Eco Rapid-Fire Quiz   •   Plastic-Free Challenge   •   Environmental Dumb Charades   •   Eco Innovation Challenge",
-      60, y, { width: W - 120, align: "center", characterSpacing: 0.3 });
-    y += 15;
-
-    /* ---- 15. Tagline Banner ---- */
-    doc.font("Helvetica-Bold").fontSize(8).fillColor(GREEN);
-    doc.text("BE AWARE   •   REDUCE   •   ACT   •   MAKE A DIFFERENCE",
-      60, y, { width: W - 120, align: "center", characterSpacing: 2.2 });
-
-    /* ---- 16. Footer: Signatures + Technology Partner Logo ---- */
-    const niatPath = path.join(__dirname, "public", "niat_icon.png");
-    const niatBuf = fs.existsSync(niatPath) ? fs.readFileSync(niatPath) : null;
-
-    // Technology Partner Center Block
-    doc.font("Helvetica-Bold").fontSize(6.8).fillColor("#222222");
-    doc.text("TECHNOLOGY PARTNER", cx - 80, H - 76, { width: 160, align: "center", characterSpacing: 1.2 });
-    if (niatBuf) {
-      try {
-        doc.image(niatBuf, cx - 11, H - 64, { width: 22, height: 22 });
-      } catch {}
-    }
-
-    // Optional Signatures on Left & Right
-    const sigY = H - 68;
-    const sigW = 120;
-    const putSig = (buf, xc, role, fallback) => {
-      if (!buf && !role) return;
-      if (buf) {
-        try { doc.image(buf, xc - sigW / 2, sigY - 36, { fit: [sigW, 34], align: "center", valign: "bottom" }); }
-        catch {}
-      }
-      doc.moveTo(xc - sigW / 2 + 5, sigY).lineTo(xc + sigW / 2 - 5, sigY)
-         .lineWidth(0.9).strokeColor(hex(TEXT_MUTED)).stroke();
-      doc.font("Helvetica-Bold").fontSize(7.5).fillColor(TEXT_BLACK);
-      doc.text(role || fallback, xc - sigW / 2, sigY + 3, { width: sigW, align: "center" });
-      if (role && role !== fallback) {
-        doc.font("Helvetica").fontSize(6.5).fillColor(TEXT_MUTED);
-        doc.text(fallback, xc - sigW / 2, sigY + 12, { width: sigW, align: "center" });
-      }
-    };
-
-    putSig(d.sig1Buf, mIn + 70, d.event.sig1_role, "Faculty Coordinator");
-    putSig(d.sig2Buf, W - mIn - 70, d.event.sig2_role, "Principal");
-
-    /* End of document (NO QR code) */
-    doc.end();
-  });
+/* ---- synchronous metric access for the HTML preview (after warm-up) ---- */
+function getFontMetricsSync() {
+  return METRICS ? { w: (name, size, text) => METRICS.fonts[name].widthOfTextAtSize(text, size) } : null;
 }
+/* warm the metric cache so HTML previews have exact fit sizes even before any PDF is made */
+(async () => { try { await getFontMetrics(); } catch { /* metrics stay optional */ } })();
 
-module.exports = { certCSS, renderCertHTML, generatePDF, ACFG, esc };
+module.exports = { certCSS, renderCertHTML, generatePDF, CATEGORIES, TEMPLATES, normaliseCategory, esc };

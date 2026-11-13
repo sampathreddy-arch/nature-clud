@@ -30,22 +30,22 @@ h1{font-size:26px;color:#1f5c36;margin:8px 0 4px}
   </div>
   <div class="logo">🌿</div>
   <h1>Nature Club – E-Certificate Portal</h1>
-  <p class="sub">Aurora Higher Education and Research Academy – Bhongir Campus<br>ECO GAMES – PLAY FOR THE PLANET · 14 November 2026</p>
+  <p class="sub">Aurora Deemed-to-be-University<br>ECO GAMES – PLAY FOR THE PLANET · 14 November 2026</p>
   <div class="cards">
     <div class="card">
       <div class="ic">🛡️</div>
       <h2>Administrator</h2>
-      <p>Manage students, events, certificate design,<br>publishing and portal QR codes.</p>
+      <p>Manage students, events, the three official certificate templates,<br>approval, publishing and the student portal link.</p>
       <a href="/admin">Admin Login</a>
     </div>
     <div class="card">
       <div class="ic">🎓</div>
       <h2>Students</h2>
-      <p>Scan the QR code displayed at the venue,<br>then search and download your e-certificate.</p>
+      <p>Open the portal link shared by the Nature Club,<br>search your name or roll number and download your e-certificate.</p>
       <a href="#" onclick="goPortal()">Student Portal</a>
     </div>
   </div>
-  <p class="foot">Think Green • Play Smart • Save Earth</p>
+  <p class="foot">BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE</p>
 </div>
 <script>
 function goPortal(){
@@ -54,7 +54,7 @@ function goPortal(){
     else if(d.active && d.active.length>1){
       const i=prompt('Active portals:\n'+d.active.map((a,n)=>`${n+1}. ${a.title}`).join('\n')+'\nEnter number:');
       const n=parseInt(i); if(n>=1&&n<=d.active.length) location.href='/portal/'+d.active[n-1].token;
-    } else alert('No active student portal right now. Scan the QR code at the venue.');
+    } else alert('No active student portal right now. Please contact the Nature Club coordinator.');
   });
 }
 </script>

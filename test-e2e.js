@@ -42,11 +42,14 @@ async function call(method, path, body, expectJson = true) {
   log("duplicate roll rejected:", d.status === 409 ? "OK" : `FAIL ${d.status}`);
 
   // assign categories
-  await call("POST", "/api/admin/events/1/certificates", { student_ids: ids.slice(0, 4), category: "Participation" });
-  await call("POST", "/api/admin/events/1/certificates", { student_ids: [ids[4]], category: "First Prize" });
+  await call("POST", "/api/admin/events/1/certificates", { student_ids: ids.slice(0, 3), category: "Participation" });
+  await call("POST", "/api/admin/events/1/certificates", { student_ids: [ids[3]], category: "Runner-up" });
+  await call("POST", "/api/admin/events/1/certificates", { student_ids: [ids[4]], category: "Winner" });
   d = await call("GET", "/api/admin/events/1/certificates");
   log("certificates created:", d.data.certificates.length, d.data.certificates.map(c => c.cert_uid).join(","));
   const certIds = d.data.certificates.map(c => c.id);
+  const assigned = new Set(d.data.certificates.map(c => c.category));
+  log("all official categories assigned:", ["Winner", "Runner-up", "Participation"].every(x => assigned.has(x)) ? "OK" : "FAIL");
 
   // unapproved publish should fail
   d = await call("POST", "/api/admin/certificates/status", { ids: certIds, status: "published" });
@@ -93,17 +96,17 @@ async function call(method, path, body, expectJson = true) {
   const pv = await fetch(`${BASEC}/api/portal/${token}/preview/${certToken}`);
   const html = await pv.text();
   log("preview html:", pv.status, html.includes("CERTIFICATE") ? "OK" : "no cert?");
+  log("preview has an uncaptioned direct-download QR and no campus/verification text:", html.includes("Certificate download QR code") && !html.includes("SCAN TO DOWNLOAD") && !/bhongir/i.test(html) && !/api\/verify/i.test(html) ? "OK" : "FAIL");
 
-  // verify token
-  d = await call("GET", `/api/verify/${certToken}`);
-  log("verify:", d.data.valid, d.data.name, d.data.category, d.data.cert_uid);
-  d = await call("GET", "/api/verify/bogus-token-123");
-  log("bogus verify ->", d.data.valid === false ? "OK invalid" : "FAIL");
+  // Generate a PDF through the admin route for each official category.
+  d = await call("GET", "/api/admin/events/1/certificates");
+  for (const category of ["Winner", "Runner-up", "Participation"]) {
+    const target = d.data.certificates.find(c => c.category === category);
+    const pdf = await fetch(`${BASEC}/api/admin/certificates/${target.id}/pdf`, { headers: { Cookie: COOKIE } });
+    const bytes = Buffer.from(await pdf.arrayBuffer());
+    log(`${category} template PDF:`, pdf.status, "isPDF:", bytes.slice(0, 4).toString() === "%PDF");
+  }
 
-  // zip
-  const z = await call("GET", "/api/admin/events/1/zip", undefined, false);
-  const zb = Buffer.from(await z.r.arrayBuffer());
-  log("zip export:", z.r.status, `bytes=${zb.length}`, "isZIP:", zb.slice(0, 2).toString() === "PK");
-
+  // direct-link certificate info (QR codes use the download route, not verification)
   console.log("=== SMOKE TEST COMPLETE ===");
 })().catch(e => { console.error("TEST ERROR:", e.message); process.exit(1); });

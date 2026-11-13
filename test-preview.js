@@ -7,8 +7,8 @@
   console.log("cert row: id", c.id, "| name:", c.name, "| year:", c.year, "| category:", c.category, "| status:", c.status);
   const r = await fetch(B + "/api/admin/certificates/" + c.id + "/preview", { headers: { Cookie: cookie } });
   const t = await r.text();
-  const rec = t.match(/id="cert-name">([^<]*)</);
+  const rec = t.match(/class="sname"[^>]*>([^<]*)</);
   console.log("preview status:", r.status, "| recipient:", rec && rec[1]);
-  console.log("has 2nd prize text:", t.includes("Second Prize"));
-  console.log("has old name:", t.includes("Arjun Verma "));
+  console.log("runner-up subtitle:", t.includes("OF ACHIEVEMENT"));
+  console.log("no old name:", !t.includes("Arjun Verma "));
 })();

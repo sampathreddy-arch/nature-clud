@@ -7,7 +7,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = process.env.ECOCERT_DATA_DIR || path.join(__dirname, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS events (
   event_date     TEXT NOT NULL,
   organiser      TEXT NOT NULL,
   category       TEXT NOT NULL DEFAULT 'Participation',
-  institute      TEXT NOT NULL DEFAULT 'Aurora Higher Education and Research Academy - Bhongir Campus',
-  motto          TEXT DEFAULT 'Think Green • Play Smart • Save Earth',
+  institute      TEXT NOT NULL DEFAULT 'Aurora Deemed-to-be-University',
+  motto          TEXT DEFAULT 'BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE',
   issued_line    TEXT DEFAULT '',
   logo_path      TEXT,
   sig1_path      TEXT,
@@ -68,11 +68,11 @@ CREATE TABLE IF NOT EXISTS students (
 
 CREATE TABLE IF NOT EXISTS certificates (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  token         TEXT UNIQUE NOT NULL,          -- secure verification token (per certificate QR)
-  cert_uid      TEXT UNIQUE NOT NULL,          -- human-readable certificate ID (CERT-EG26-0001)
+  token         TEXT UNIQUE NOT NULL,          -- direct-link token for the student portal
+  cert_uid      TEXT UNIQUE NOT NULL,          -- human-readable certificate ID (EG26-0001)
   student_id    INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   event_id      INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-  category      TEXT NOT NULL DEFAULT 'Participation',  -- Participation | First Prize | Second Prize | Third Prize
+  category      TEXT NOT NULL DEFAULT 'Participation',  -- Winner | Runner-up | Participation
   status        TEXT NOT NULL DEFAULT 'draft', -- draft | approved | published
   issue_date    TEXT DEFAULT '',
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
@@ -129,12 +129,30 @@ function safeAlter(sql) { try { db.exec(sql); } catch (e) { if (!String(e.messag
       "14 November 2026",
       "Nature Club",
       "Participation",
-      "Aurora Higher Education and Research Academy – Bhongir Campus",
-      "Think Green • Play Smart • Save Earth",
-      "Aurora Higher Education and Research Academy – Bhongir Campus • Children's Day Special",
+      "Aurora Deemed-to-be-University",
+      "BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE",
+      "",
       uid(12), "EG26");
     console.log("[db] Default event seeded: ECO GAMES – PLAY FOR THE PLANET (14 November 2026)");
   }
+  /* Normalize existing public Eco Games event details without deleting records. */
+  for (const e of all("SELECT id, institute, issued_line, motto FROM events")) {
+    const inst = String(e.institute || "").replace(/\s*[–-]\s*Bhongir Campus/gi, "").replace(/Bhongir Campus,?\s*/gi, "").trim();
+    const line = String(e.issued_line || "").replace(/Bhongir Campus,?\s*/gi, "").trim();
+    const eventTitle = String(row("SELECT title FROM events WHERE id = ?", e.id)?.title || "");
+    const ecoGames = /eco games\s*[–-]\s*play for the planet/i.test(eventTitle);
+    const nextInst = ecoGames ? "Aurora Deemed-to-be-University" : inst;
+    const nextLine = ecoGames ? "" : line;
+    const officialMotto = "BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE";
+    const nextMotto = ecoGames ? officialMotto : e.motto;
+    if (nextInst !== e.institute || nextLine !== e.issued_line || nextMotto !== e.motto) {
+      run("UPDATE events SET institute = ?, issued_line = ?, motto = ? WHERE id = ?", nextInst, nextLine, nextMotto, e.id);
+    }
+  }
+  /* Normalize legacy award labels in place; certificate IDs and relationships stay unchanged. */
+  run("UPDATE certificates SET category = 'Winner' WHERE lower(trim(category)) IN ('first prize', 'first', '1st')");
+  run("UPDATE certificates SET category = 'Runner-up' WHERE lower(trim(category)) IN ('second prize', 'second', '2nd', 'runner up', 'runnerup')");
+  run("UPDATE certificates SET category = 'Participation' WHERE lower(trim(category)) IN ('third prize', 'third', '3rd', 'participant')");
 })();
 
 module.exports = { db, row, all, run, uid, UPLOAD_DIR, DATA_DIR };

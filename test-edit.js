@@ -11,7 +11,7 @@
   // 2. edit certificate category + recipient name via the new flows
   d = await (await fetch(B + "/api/admin/events/1/certificates", h)).json();
   const c = d.certificates.find(x => x.name.includes("Arjun"));
-  const up = await fetch(B + "/api/admin/certificates/" + c.id, { method: "PUT", headers: h.headers, body: JSON.stringify({ category: "Second Prize" }) });
+  const up = await fetch(B + "/api/admin/certificates/" + c.id, { method: "PUT", headers: h.headers, body: JSON.stringify({ category: "Runner-up" }) });
   console.log("2. re-category PUBLISHED cert:", up.status, JSON.stringify(await up.json()));
 
   const su = await fetch(B + "/api/admin/students/" + c.student_id, { method: "PUT", headers: h.headers, body: JSON.stringify({ name: "Arjun Verma Reddy", year: "Second Year" }) });

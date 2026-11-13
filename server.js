@@ -1,20 +1,20 @@
 /* ============================================================
    Nature Club – E-Certificate Portal
-   Aurora Higher Education and Research Academy, Bhongir Campus
+   Aurora Deemed-to-be-University
    Common backend for Phase 1 (Admin) + Phase 2 (Student Portal)
    ============================================================ */
 const express = require("express");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
-const QRCode = require("qrcode");
 const XLSX = require("xlsx");
 const JSZip = require("jszip");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const { row, all, run, uid, UPLOAD_DIR } = require("./db");
-const { certCSS, renderCertHTML, generatePDF } = require("./certgen");
-const mongo = require("./mongo");
+const { certCSS, renderCertHTML, generatePDF, CATEGORIES, normaliseCategory } = require("./certgen");
+let mongo = null;
+try { mongo = require("./mongo"); } catch (e) { console.warn("[mongo] optional integration not loaded:", e.message); }
 
 const app = express();
 const PORT = process.env.PORT || 3100;         // 3100: 3000 is used by another local project
@@ -32,7 +32,6 @@ app.get("/", send("landing.html"));
 app.get("/admin", send("admin.html"));
 app.use("/data-uploads", express.static(UPLOAD_DIR, { fallthrough: false }));
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/verify/:token", send("verify.html"));
 app.get("/portal/:token", (req, res) =>
   res.send(portalHTML().replace(/__TOKEN__/g, JSON.stringify(req.params.token))));
 
@@ -122,6 +121,8 @@ app.get("/api/admin/stats", requireAdmin, (req, res) => {
     students: n("SELECT COUNT(*) n FROM students"),
     certificates: n("SELECT COUNT(*) n FROM certificates"),
     participation: n("SELECT COUNT(*) n FROM certificates WHERE category = 'Participation'"),
+    winner: n("SELECT COUNT(*) n FROM certificates WHERE category = 'Winner'"),
+    runnerup: n("SELECT COUNT(*) n FROM certificates WHERE category = 'Runner-up'"),
     winners: n("SELECT COUNT(*) n FROM certificates WHERE category != 'Participation'"),
     downloaded: n("SELECT COUNT(DISTINCT cert_id) n FROM download_logs"),
     published: n("SELECT COUNT(*) n FROM certificates WHERE status = 'published'")
@@ -151,8 +152,8 @@ app.post("/api/admin/events", requireAdmin, (req, res) => {
   const info = run(`INSERT INTO events (title, event_date, organiser, category, institute, motto, issued_line, cert_prefix, portal_token, portal_active)
                     VALUES (?,?,?,?,?,?,?,?,?,?)`,
     String(b.title).trim(), String(b.event_date).trim(), String(b.organiser).trim(),
-    b.category || "Participation", b.institute || "Aurora Higher Education and Research Academy – Bhongir Campus",
-    b.motto || "Think Green • Play Smart • Save Earth", b.issued_line || "", b.cert_prefix || "EG", uid(12), b.portal_active ? 1 : 0);
+    b.category || "Participation", b.institute || "Aurora Deemed-to-be-University",
+    b.motto || "BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE", b.issued_line || "", b.cert_prefix || "EG", uid(12), b.portal_active ? 1 : 0);
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
@@ -173,7 +174,7 @@ app.put("/api/admin/events/:id", requireAdmin, (req, res) => {
 
 app.post("/api/admin/events/:id/regenerate-portal-token", requireAdmin, (req, res) => {
   run("UPDATE events SET portal_token = ? WHERE id = ?", uid(12), req.params.id);
-  res.json({ ok: true, message: "Portal link regenerated — old QR stops working" });
+  res.json({ ok: true, message: "Portal link regenerated — the old link stops working" });
 });
 
 /* uploads: logo / signatures */
@@ -206,6 +207,9 @@ app.delete("/api/admin/events/:id/assets/:key", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+/* small display normalizer: legacy categories (First/Second/Third Prize) shown & rendered as official ones */
+const displayCat = (c) => normaliseCategory(c) || c;
+
 /* ---------------- students ---------------- */
 app.get("/api/admin/events/:id/students", requireAdmin, (req, res) => {
   const q = (req.query.q || "").trim();
@@ -223,7 +227,7 @@ app.get("/api/admin/events/:id/students", requireAdmin, (req, res) => {
                 WHERE s.event_id = ? ORDER BY s.name`, req.params.id);
   }
   const total = (row("SELECT COUNT(*) n FROM students WHERE event_id = ?", req.params.id) || {}).n || 0;
-  res.json({ students: rows, total });
+  res.json({ students: rows.map(r => ({ ...r, cert_category: r.cert_category ? displayCat(r.cert_category) : null })), total });
 });
 
 /* Create student with all demographic & date fields */
@@ -245,7 +249,9 @@ app.post("/api/admin/events/:id/students", requireAdmin, (req, res) => {
       (b.date || "").trim()
     );
     const sid = info.lastInsertRowid;
-    mongo.syncStudent({ id: sid, event_id: e.id, name: b.name, roll_number: b.roll_number, department: b.department, year: b.year, email: b.email, phone: b.phone, date: b.date });
+    if (mongo?.syncStudent) {
+      mongo.syncStudent({ id: sid, event_id: e.id, name: b.name, roll_number: b.roll_number, department: b.department, year: b.year, email: b.email, phone: b.phone, date: b.date }).catch(() => {});
+    }
     res.json({ ok: true, id: sid });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) return res.status(409).json({ error: "Roll number already registered for this event" });
@@ -266,8 +272,8 @@ app.put("/api/admin/students/:id", requireAdmin, (req, res) => {
   try {
     run(`UPDATE students SET ${updates.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`,
       ...updates.map((k) => String(b[k] ?? "").trim()), s.id);
-    const updated = row("SELECT * FROM students WHERE id = ?", s.id);
-    if (updated) mongo.syncStudent(updated);
+    const updatedStudent = row("SELECT * FROM students WHERE id = ?", s.id);
+    if (mongo?.syncStudent && updatedStudent) mongo.syncStudent(updatedStudent).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) return res.status(409).json({ error: "Roll number already used by another student" });
@@ -277,8 +283,8 @@ app.put("/api/admin/students/:id", requireAdmin, (req, res) => {
 
 app.delete("/api/admin/students/:id", requireAdmin, (req, res) => {
   const s = row("SELECT * FROM students WHERE id = ?", req.params.id);
-  if (s) mongo.deleteStudent(s.event_id, s.roll_number);
   run("DELETE FROM students WHERE id = ?", req.params.id);
+  if (mongo?.deleteStudent) mongo.deleteStudent(req.params.id).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -335,19 +341,13 @@ app.post("/api/admin/events/:id/students/import", requireAdmin, upload.single("f
       }
     }
     if (st.award) {
-      const cat = NORMALISE.get(st.award.toLowerCase()) || null;
+      const cat = normaliseCategory(st.award);
       if (cat) createCertificate(e.id, sid, cat, st.date);
     }
   }
-  mongo.syncAllFromSQLite(require("./db")).catch(() => {});
+  if (mongo?.syncAllFromSQLite) mongo.syncAllFromSQLite(require("./db")).catch(() => {});
   res.json({ ok: true, added, updated, skipped, total: added + updated + skipped });
 });
-const NORMALISE = new Map([
-  ["first prize", "First Prize"], ["first", "First Prize"], ["1st", "First Prize"], ["winner", "First Prize"],
-  ["second prize", "Second Prize"], ["second", "Second Prize"], ["2nd", "Second Prize"],
-  ["third prize", "Third Prize"], ["third", "Third Prize"], ["3rd", "Third Prize"],
-  ["participation", "Participation"], ["participant", "Participation"]
-]);
 
 /* ---------------- certificates ---------------- */
 function nextCertUid(event) {
@@ -363,20 +363,20 @@ function nextCertUid(event) {
 
 function createCertificate(eventId, studentId, category, issueDate = null) {
   const event = row("SELECT * FROM events WHERE id = ?", eventId);
-  const cat = NORMALISE.get(String(category).toLowerCase()) || category;
+  const cat = normaliseCategory(category) || category;
   const existing = row("SELECT id FROM certificates WHERE student_id = ? AND event_id = ?", studentId, eventId);
   const stu = row("SELECT date FROM students WHERE id = ?", studentId);
   const dateVal = issueDate || stu?.date || event?.event_date || "";
   if (existing) {
     run("UPDATE certificates SET category = ?, issue_date = ? WHERE id = ?", cat, dateVal, existing.id);
     const cRow = row("SELECT * FROM certificates WHERE id = ?", existing.id);
-    if (cRow) mongo.syncCertificate(cRow);
+    if (mongo?.syncCertificate && cRow) mongo.syncCertificate(cRow).catch(() => {});
     return existing.id;
   }
   const info = run("INSERT INTO certificates (token, cert_uid, student_id, event_id, category, issue_date) VALUES (?,?,?,?,?,?)",
     uid(18), nextCertUid(event), studentId, eventId, cat, dateVal);
   const cRow = row("SELECT * FROM certificates WHERE id = ?", info.lastInsertRowid);
-  if (cRow) mongo.syncCertificate(cRow);
+  if (mongo?.syncCertificate && cRow) mongo.syncCertificate(cRow).catch(() => {});
   return info.lastInsertRowid;
 }
 
@@ -384,15 +384,15 @@ app.get("/api/admin/events/:id/certificates", requireAdmin, (req, res) => {
   const rowsFound = all(`SELECT c.*, s.name, s.roll_number, s.department, s.year, s.email, s.phone, s.date student_date
                          FROM certificates c JOIN students s ON s.id = c.student_id
                          WHERE c.event_id = ? ORDER BY c.id`, req.params.id);
-  res.json({ certificates: rowsFound });
+  res.json({ certificates: rowsFound.map(c => ({ ...c, category: displayCat(c.category) })) });
 });
 
 app.post("/api/admin/events/:id/certificates", requireAdmin, (req, res) => {
   const { student_ids, category } = req.body || {};
   const ids = [...new Set((student_ids || []).map(Number).filter(Number.isInteger))];
   if (!ids.length) return res.status(400).json({ error: "Select at least one student" });
-  if (!NORMALISE.get(String(category).toLowerCase()) && !Object.keys(require("./certgen").ACFG).includes(category))
-    return res.status(400).json({ error: "Invalid category" });
+  if (!normaliseCategory(category))
+    return res.status(400).json({ error: "Invalid category — use Winner, Runner-up or Participation" });
   let created = 0;
   for (const sid of ids) { createCertificate(req.params.id, sid, category); created++; }
   res.json({ ok: true, count: created });
@@ -402,10 +402,10 @@ app.put("/api/admin/certificates/:id", requireAdmin, (req, res) => {
   const c = row("SELECT * FROM certificates WHERE id = ?", req.params.id);
   if (!c) return res.status(404).json({ error: "Certificate not found" });
   const { category } = req.body || {};
-  const cat = NORMALISE.get(String(category).toLowerCase());
-  if (!cat) return res.status(400).json({ error: "Invalid category" });
+  const cat = normaliseCategory(category);
+  if (!cat) return res.status(400).json({ error: "Invalid category — use Winner, Runner-up or Participation" });
   run("UPDATE certificates SET category = ? WHERE id = ?", cat, c.id);
-  res.json({ ok: true });
+  res.json({ ok: true, category: cat });
 });
 
 app.post("/api/admin/certificates/status", requireAdmin, (req, res) => {
@@ -442,16 +442,17 @@ function fileToDataURL(f) {
 
 async function buildCertData(cert, student) {
   const event = row("SELECT * FROM events WHERE id = ?", cert.event_id);
-  const verifyUrl = `${BASE}/verify/${cert.token}`;
   return {
     certUid: cert.cert_uid,
     category: cert.category,
     student,
     event,
+    qrUrl: cert.status === "published" && event?.portal_active && event.portal_token && cert.token
+      ? `${BASE}/api/portal/${encodeURIComponent(event.portal_token)}/download/${encodeURIComponent(cert.token)}`
+      : null,
     logo: fileToDataURL(event.logo_path),
     sig1: fileToDataURL(event.sig1_path),
-    sig2: fileToDataURL(event.sig2_path),
-    qr: await QRCode.toDataURL(verifyUrl, { margin: 1, width: 220, color: { dark: "#134d2c" } })
+    sig2: fileToDataURL(event.sig2_path)
   };
 }
 
@@ -478,10 +479,9 @@ app.get("/api/admin/events/:id/preview-all", requireAdmin, async (req, res) => {
   res.send(certPage(parts.join("\n")));
 });
 
-/* PDF for a certificate (admin download + student download) */
+/* PDF for a certificate (admin download + student download) — QR links to direct student download */
 async function certPDF(cert, student) {
   const d = await buildCertData(cert, student);
-  d.qrBuf = await QRCode.toBuffer(`${BASE}/verify/${cert.token}`, { margin: 1, width: 320, color: { dark: "#134d2c" } });
   d.logoBuf = eventFile(cert.event_id, "logo_path");
   d.sig1Buf = eventFile(cert.event_id, "sig1_path");
   d.sig2Buf = eventFile(cert.event_id, "sig2_path");
@@ -524,17 +524,7 @@ app.get("/api/admin/events/:id/zip", requireAdmin, async (req, res) => {
 });
 const fileSafe = (n) => String(n || "student").replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "student";
 
-/* ---------------- shared portal QR (admin) ---------------- */
-app.get("/api/admin/events/:id/portal-qr", requireAdmin, async (req, res) => {
-  const e = row("SELECT * FROM events WHERE id = ?", req.params.id);
-  if (!e?.portal_token) return res.status(404).json({ error: "No portal token" });
-  const url = `${BASE}/portal/${e.portal_token}`;
-  const buf = await QRCode.toBuffer(url, { margin: 2, width: 500, color: { dark: "#134d2c" } });
-  res.setHeader("Content-Type", "image/png");
-  res.send(buf);
-});
-
-/* student landing: list active portals (public info only) */
+/* ---------------- student landing: list active portals (public info only) ---------------- */
 app.get("/api/portal/list-active", (req, res) => {
   const events = all("SELECT portal_token AS token, title, event_date FROM events WHERE portal_active = 1 AND is_active = 1 ORDER BY event_date DESC LIMIT 5");
   res.json({ active: events });
@@ -560,7 +550,7 @@ app.get("/api/portal/:token/search", (req, res) => {
   const q = String(req.query.q || "").trim();
   if (q.length < 2) return res.json({ results: [] });
   const results = all(`
-    SELECT DISTINCT s.id, s.name, s.roll_number, s.year
+    SELECT DISTINCT s.id, s.name, s.roll_number, s.year, s.department
     FROM students s JOIN certificates c ON c.student_id = s.id AND c.event_id = s.event_id
     WHERE s.event_id = ? AND c.status = 'published' AND (s.name LIKE ? OR s.roll_number LIKE ?)
     ORDER BY s.name LIMIT 12`, e.id, `%${q}%`, `%${q}%`);
@@ -575,7 +565,7 @@ app.get("/api/portal/:token/certinfo/:studentId", (req, res) => {
   const c = row(`SELECT c.token, c.category FROM certificates c
                  WHERE c.student_id = ? AND c.event_id = ? AND c.status = 'published'`, req.params.studentId, e.id);
   if (!c) return res.status(404).json({ error: "No published certificate for this student" });
-  res.json({ ok: true, category: c.category, token: c.token });
+  res.json({ ok: true, category: displayCat(c.category), token: c.token });
 });
 
 /* selection confirmation -> certificate preview data */
@@ -590,7 +580,7 @@ app.get("/api/portal/:token/cert/:certToken", (req, res) => {
   res.json({
     ok: true,
     certificate: {
-      cert_uid: c.cert_uid, category: c.category, name: c.name, roll_number: c.roll_number,
+      cert_uid: c.cert_uid, category: displayCat(c.category), name: c.name, roll_number: c.roll_number,
       year: c.year, event_title: e.title, event_date: e.event_date, institute: e.institute
     }
   });
@@ -622,34 +612,10 @@ app.get("/api/portal/:token/download/:certToken", async (req, res) => {
   res.send(buf);
 });
 
-/* ---------------- verification ---------------- */
-app.get("/api/verify/:token", (req, res) => {
-  if (!rateLimit(`verify:${ip(req)}`, 40, 60_000)) return res.status(429).json({ error: "Too many requests." });
-  const c = row(`SELECT c.token, c.cert_uid, c.category, c.status, s.name,
-                        t.title event_title, t.event_date, t.institute, t.organiser
-                 FROM certificates c JOIN students s ON s.id = c.student_id
-                 JOIN events t ON t.id = c.event_id WHERE c.token = ?`, req.params.token);
-  if (!c) return res.json({ valid: false, message: "Invalid certificate. This QR code does not match any issued certificate." });
-  res.json({
-    valid: c.status === "published",
-    name: c.name, cert_uid: c.cert_uid, category: c.category, status: c.status,
-    event_title: c.event_title, event_date: c.event_date, institute: c.institute, organiser: c.organiser
-  });
-});
-
 /* ---------------- admin SPA data helper (event assets) ---------------- */
 app.get("/api/admin/events/:id/assets", requireAdmin, (req, res) => {
   const e = row("SELECT logo_path, sig1_path, sig1_role, sig2_path, sig2_role FROM events WHERE id = ?", req.params.id);
   res.json({ assets: e || {} });
-});
-
-/* ---------------- MongoDB Atlas status & sync ---------------- */
-app.get("/api/admin/mongo/status", requireAdmin, async (req, res) => {
-  res.json(await mongo.getMongoStatus());
-});
-
-app.post("/api/admin/mongo/sync", requireAdmin, async (req, res) => {
-  res.json(await mongo.syncAllFromSQLite(require("./db")));
 });
 
 /* 404 for unknown api */
@@ -675,7 +641,11 @@ app.listen(PORT, () => {
   console.log(`  Admin panel : ${BASE}/admin   (default: admin / admin123)`);
   console.log(`  Home        : ${BASE}/`);
   console.log("===========================================================");
-  mongo.connectMongo().then((ok) => {
-    if (ok) mongo.syncAllFromSQLite(require("./db"));
-  }).catch((e) => console.warn("[mongo] Init warning:", e.message));
+  if (mongo?.connectMongo) {
+    mongo.connectMongo().then((ok) => {
+      if (ok && mongo.syncAllFromSQLite) {
+        mongo.syncAllFromSQLite(require("./db")).catch(() => {});
+      }
+    }).catch(() => {});
+  }
 });

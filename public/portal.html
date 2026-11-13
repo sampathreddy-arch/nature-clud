@@ -59,7 +59,7 @@ footer{text-align:center;font-size:11.5px;color:#8a9a8c;padding:20px 10px 34px}
   </div>
   <div class="leaf">🌿</div>
   <h1 id="hTitle">E-Certificate Portal</h1>
-  <div class="inst" id="hInst">Aurora Higher Education and Research Academy – Bhongir Campus</div>
+  <div class="inst" id="hInst">Aurora Deemed-to-be-University</div>
 </header>
 
 <main>
@@ -92,6 +92,7 @@ footer{text-align:center;font-size:11.5px;color:#8a9a8c;padding:20px 10px 34px}
     <div class="row"><span class="k">Name</span><span class="v" id="cName"></span></div>
     <div class="row"><span class="k">Roll Number</span><span class="v" id="cRoll"></span></div>
     <div class="row"><span class="k">Year</span><span class="v" id="cYear"></span></div>
+    <div class="row"><span class="k">Department</span><span class="v" id="cDepartment"></span></div>
     <div class="row"><span class="k">Certificate</span><span class="v"><span class="cat" id="cCat"></span></span></div>
     <button class="bigbtn" onclick="showCert()">✅ Yes — Show my certificate</button>
     <div style="text-align:center"><button class="linklike" onclick="backSearch()">← Not me, search again</button></div>
@@ -105,8 +106,8 @@ footer{text-align:center;font-size:11.5px;color:#8a9a8c;padding:20px 10px 34px}
     <div style="text-align:center"><button class="linklike" onclick="backSearch()">← Download another certificate</button></div>
   </div>
 
-  <footer>Nature Club · Aurora Higher Education and Research Academy – Bhongir Campus<br>
-  Think Green • Play Smart • Save Earth</footer>
+  <footer>Nature Club · Aurora Deemed-to-be-University<br>
+  BE AWARE • REDUCE • ACT • MAKE A DIFFERENCE</footer>
 </main>
 
 <script>
@@ -165,6 +166,7 @@ function pick(json) {
   $("cName").textContent = selected.name;
   $("cRoll").textContent = selected.roll_number;
   $("cYear").textContent = selected.year || "—";
+  $("cDepartment").textContent = selected.department || "—";
   $("cCat").textContent = "Loading…";
   show("stepConfirm");
   fetch(`/api/portal/${TOKEN}/certinfo/${selected.id}`).then(r => r.json()).then(d => {

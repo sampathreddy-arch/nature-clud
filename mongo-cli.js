@@ -4,7 +4,7 @@
    Cluster: cluster0.8zo4dqi.mongodb.net / ecocert
    ============================================================ */
 const { spawn } = require("child_process");
-const { connectMongo, Student, Certificate, Event, syncAllToMongo, MONGODB_URI } = require("./mongo");
+const { connectMongo, Student, Certificate, Event, syncAllFromSQLite, MONGODB_URI } = require("./mongo");
 const db = require("./db");
 
 const args = process.argv.slice(2);
@@ -14,7 +14,6 @@ async function main() {
   if (command === "mongosh" || command === "shell") {
     console.log("------------------------------------------------------------");
     console.log("Connecting to MongoDB Atlas via mongosh...");
-    console.log("URI:", MONGODB_URI);
     console.log("------------------------------------------------------------\n");
 
     const isWin = process.platform === "win32";
@@ -26,7 +25,7 @@ async function main() {
     child.on("error", (err) => {
       console.error("Error starting mongosh:", err.message);
       console.log("\nYou can run it manually with:");
-      console.log(`npx mongosh "${MONGODB_URI}"`);
+      console.log("Set MONGODB_URI and run the mongosh helper again.");
     });
     return;
   }
@@ -93,7 +92,7 @@ async function main() {
 
       case "sync": {
         console.log("Synchronizing SQLite data with MongoDB Atlas...");
-        const res = await syncAllToMongo(db);
+        const res = await syncAllFromSQLite(db);
         console.log("Sync complete:", res);
         break;
       }
